@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from app.core.config import settings
 from app.api.responses import SuccessResponse
 from app.core.exceptions import AgriFluxException, agriflux_exception_handler
+from app.api.endpoints import auth
 
 def get_application() -> FastAPI:
     application = FastAPI(
@@ -13,8 +14,8 @@ def get_application() -> FastAPI:
     # Add exception handlers
     application.add_exception_handler(AgriFluxException, agriflux_exception_handler)
 
-    # TODO: Include API routers here in future phases
-    # application.include_router(api_router, prefix=settings.API_V1_STR)
+    # Attach modules
+    application.include_router(auth.router, prefix=f"{settings.API_V1_STR}/auth", tags=["auth"])
 
     return application
 

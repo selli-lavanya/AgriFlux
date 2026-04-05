@@ -4,9 +4,10 @@ sqlalchemy
 alembic
 asyncpg
 psycopg2-binary
-pydantic
+pydantic[email]
 pydantic-settings
 python-dotenv
 pyjwt
 passlib
 bcrypt
+python-multipart
