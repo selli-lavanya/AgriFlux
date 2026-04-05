@@ -18,9 +18,21 @@ if config.config_file_name is not None:
 
 # add your model's MetaData object here
 # for 'autogenerate' support
-# from myapp import mymodel
-# target_metadata = mymodel.Base.metadata
-target_metadata = None
+import os
+import sys
+from dotenv import load_dotenv
+
+# Add backend directory to sys.path
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+
+from app.db.database import Base
+from app.models import *  # This loads all models into Base.metadata
+
+target_metadata = Base.metadata
+
+# Set sqlalchemy.url from our env
+load_dotenv()
+config.set_main_option("sqlalchemy.url", os.getenv("DATABASE_URL"))
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:

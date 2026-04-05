@@ -24,6 +24,7 @@ env/
 .env.test.local
 .env.production.local
 .env.*
+!**/.env.example
 
 # Documentation
 docs/
