@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from app.core.config import settings
 from app.api.responses import SuccessResponse
 from app.core.exceptions import AgriFluxException, agriflux_exception_handler
-from app.api.endpoints import auth, farms, machines, labour
+from app.api.endpoints import auth, farms, machines, labour, requests, assignments
 
 def get_application() -> FastAPI:
     application = FastAPI(
@@ -19,6 +19,8 @@ def get_application() -> FastAPI:
     application.include_router(farms.router, prefix=f"{settings.API_V1_STR}/farms", tags=["farms"])
     application.include_router(machines.router, prefix=f"{settings.API_V1_STR}/machines", tags=["machines"])
     application.include_router(labour.router, prefix=f"{settings.API_V1_STR}/labour", tags=["labour_teams"])
+    application.include_router(requests.router, prefix=f"{settings.API_V1_STR}/requests", tags=["requests"])
+    application.include_router(assignments.router, prefix=f"{settings.API_V1_STR}/assignments", tags=["assignments"])
 
     return application
 
