@@ -16,6 +16,7 @@ class RequestOut(RequestBase):
     farmer_id: int
     status: RequestStatus
     priority_score: float
+    priority_reason: Optional[str] = None
     created_at: datetime
 
     class Config:

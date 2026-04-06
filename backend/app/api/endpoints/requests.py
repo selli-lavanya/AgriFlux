@@ -4,6 +4,7 @@ from typing import List
 from app.db.database import get_db
 from app.schemas.operations import RequestCreate, RequestOut
 from app.services import operations_service
+from app.services.priority_engine import priority_engine
 from app.api.deps import RoleChecker
 from app.models.user import User, UserRole
 
@@ -33,3 +34,11 @@ async def list_pending_requests(
     current_user: User = Depends(admin_only)
 ):
     return await operations_service.get_all_pending_requests(db)
+
+@router.post("/trigger-engine")
+async def manual_trigger_priority_engine(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(admin_only)
+):
+    """Admin endpoint to manually spin up the Risk Evaluation Engine."""
+    return await priority_engine.evaluate_pending_requests(db)
