@@ -25,3 +25,10 @@ async def read_my_machines(
     current_user: User = Depends(machine_owner_only)
 ):
     return await resource_service.get_machines_by_owner(db, owner_id=current_user.id)
+
+@router.get("/all", response_model=List[MachineOut])
+async def read_all_machines(
+    db: AsyncSession = Depends(get_db), 
+    current_user: User = Depends(RoleChecker([UserRole.ADMIN]))
+):
+    return await resource_service.get_all_machines(db)

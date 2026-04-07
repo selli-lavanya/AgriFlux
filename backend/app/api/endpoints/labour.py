@@ -25,3 +25,10 @@ async def read_my_labour_teams(
     current_user: User = Depends(labour_only)
 ):
     return await resource_service.get_labour_teams_by_leader(db, leader_id=current_user.id)
+
+@router.get("/all", response_model=List[LabourTeamOut])
+async def read_all_labour_teams(
+    db: AsyncSession = Depends(get_db), 
+    current_user: User = Depends(RoleChecker([UserRole.ADMIN]))
+):
+    return await resource_service.get_all_labour_teams(db)
