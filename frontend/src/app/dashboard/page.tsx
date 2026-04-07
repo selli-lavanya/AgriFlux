@@ -14,9 +14,10 @@ export default function DashboardPage() {
   const [requests, setRequests] = useState<any[]>([]);
   const [machines, setMachines] = useState<any[]>([]);
   const [labourTeams, setLabourTeams] = useState<any[]>([]);
+  const [assignments, setAssignments] = useState<any[]>([]);
   
   // Modals / Form State
-  const [activeTab, setActiveTab] = useState<'overview' | 'farms' | 'requests' | 'machines' | 'labour' | 'dispatcher'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'farms' | 'requests' | 'machines' | 'labour' | 'dispatcher' | 'tasks'>('overview');
   const [farmForm, setFarmForm] = useState({ name: '', size_acres: '', crop_type: '', crop_stage: 'Vegetative', location_lat: '28.61', location_lng: '77.20' });
   const [reqForm, setReqForm] = useState({ farm_id: '', type: 'machine', required_by_date: '' });
   const [machineForm, setMachineForm] = useState({ type: 'Harvester', capacity_per_day: '' });
@@ -41,11 +42,13 @@ export default function DashboardPage() {
         setRequests(reqRes.data);
         if (farmsRes.data.length > 0) setReqForm(prev => ({ ...prev, farm_id: farmsRes.data[0].id.toString() }));
       } else if (profileRes.data.role === 'machine_owner') {
-        const machRes = await api.get('/machines/');
+        const [machRes, assignRes] = await Promise.all([api.get('/machines/'), api.get('/assignments/my-tasks')]);
         setMachines(machRes.data);
+        setAssignments(assignRes.data);
       } else if (profileRes.data.role === 'labour_team') {
-        const labRes = await api.get('/labour/');
+        const [labRes, assignRes] = await Promise.all([api.get('/labour/'), api.get('/assignments/my-tasks')]);
         setLabourTeams(labRes.data);
+        setAssignments(assignRes.data);
       } else if (profileRes.data.role === 'admin') {
         // Phase 12: Admin specific fetches
         const [pendRes, allMachRes, allLabRes] = await Promise.all([
@@ -101,6 +104,14 @@ export default function DashboardPage() {
     } catch (err) { alert("Failed to register roster."); }
   };
 
+  const handleCompleteTask = async (id: number) => {
+    try {
+      await api.put(`/assignments/${id}/complete`);
+      alert("Task documented as COMPLETE. Supply Chain Notified.");
+      loadDashboardData();
+    } catch (err) { alert("Failed to finalize completion report."); }
+  };
+
   // Admin Matching Logic
   const executeEngineTrigger = async () => {
     try {
@@ -110,7 +121,7 @@ export default function DashboardPage() {
     } catch { alert("Engine computation failed"); }
   };
 
-  const executeAssignment = async (requestId: parseInt, resourceId: parseInt, type: string) => {
+  const executeAssignment = async (requestId: number, resourceId: number, type: string) => {
     try {
       await api.post('/assignments/', {
         request_id: requestId,
@@ -142,6 +153,9 @@ export default function DashboardPage() {
         )}
         {(role === 'machine_owner' || role === 'admin') && <button onClick={() => setActiveTab('machines')} className={`text-left px-4 py-3 rounded-xl font-bold transition-colors ${activeTab === 'machines' ? 'bg-amber-900/40 text-amber-400 border border-amber-500/30' : 'text-neutral-500 hover:bg-neutral-800'}`}>Machinery Assets</button>}
         {(role === 'labour_team' || role === 'admin') && <button onClick={() => setActiveTab('labour')} className={`text-left px-4 py-3 rounded-xl font-bold transition-colors ${activeTab === 'labour' ? 'bg-rose-900/40 text-rose-400 border border-rose-500/30' : 'text-neutral-500 hover:bg-neutral-800'}`}>Labour Rosters</button>}
+        {(role === 'machine_owner' || role === 'labour_team') && (
+          <button onClick={() => setActiveTab('tasks')} className={`text-left px-4 py-3 rounded-xl font-bold transition-colors ${activeTab === 'tasks' ? 'bg-indigo-900/40 text-indigo-400 border border-indigo-500/30' : 'text-neutral-500 hover:bg-neutral-800'}`}>My Assignments</button>
+        )}
         
         <div className="flex-grow" />
         <button onClick={() => { logout(); router.push('/auth/login'); }} className="text-left px-4 py-3 text-rose-500 hover:bg-rose-950/30 rounded-xl font-bold transition-colors mt-auto">Sever Link</button>
@@ -280,6 +294,32 @@ export default function DashboardPage() {
                 ))}
               </div>
             </div>
+        )}
+
+        {/* Phase 13: Provider Task Execution Loop */}
+        {activeTab === 'tasks' && (role === 'machine_owner' || role === 'labour_team') && (
+          <div className="space-y-6">
+            <h3 className="text-2xl font-bold text-indigo-400 border-b border-neutral-800 pb-4">Active Dispatch Contracts</h3>
+            <div className="grid gap-6">
+              {assignments.map(task => (
+                <div key={task.id} className="p-6 rounded-2xl border border-neutral-800 bg-neutral-900 shadow-lg flex justify-between items-center group">
+                  <div>
+                    <p className="font-bold text-white mb-1 uppercase tracking-widest text-sm">Request ID #{task.request_id}</p>
+                    <p className="text-xs text-neutral-500">Expected Window: <span className="text-indigo-300">{new Date(task.scheduled_date).toLocaleDateString()}</span></p>
+                    <div className="mt-4 flex gap-2">
+                       <span className={`px-2 py-1 text-[10px] uppercase font-bold rounded-full ${task.status === 'completed' ? 'bg-emerald-900/40 text-emerald-400 border border-emerald-500/30' : 'bg-amber-900/40 text-amber-400 border border-amber-500/30'}`}>{task.status}</span>
+                    </div>
+                  </div>
+                  {task.status !== 'completed' && (
+                    <button onClick={() => handleCompleteTask(task.id)} className="bg-emerald-600/20 text-emerald-400 hover:bg-emerald-500 hover:text-black transition-colors px-6 py-3 rounded-xl font-bold text-sm shadow-xl">
+                      Mark as Completed
+                    </button>
+                  )}
+                </div>
+              ))}
+              {assignments.length === 0 && <p className="text-neutral-500">No contracts assigned to you yet.</p>}
+            </div>
+          </div>
         )}
 
         {/* Phase 12: Admin System Dispatcher Module */}

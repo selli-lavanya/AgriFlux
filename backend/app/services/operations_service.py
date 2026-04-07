@@ -37,4 +37,40 @@ async def create_assignment(db: AsyncSession, assign_in: AssignmentCreate) -> As
         
     await db.commit()
     await db.refresh(db_obj)
+    await db.refresh(db_obj)
     return db_obj
+
+async def get_assignments_for_provider(db: AsyncSession, user_id: int, role: str):
+    from app.models.resource import Machine, LabourTeam
+    if role == 'machine_owner':
+        res = await db.execute(select(Machine.id).where(Machine.owner_id == user_id))
+        m_ids = res.scalars().all()
+        if not m_ids: return []
+        q = select(Assignment).where(Assignment.resource_type == 'machine', Assignment.resource_id.in_(m_ids))
+        res2 = await db.execute(q)
+        return res2.scalars().all()
+    elif role == 'labour_team':
+        res = await db.execute(select(LabourTeam.id).where(LabourTeam.leader_id == user_id))
+        l_ids = res.scalars().all()
+        if not l_ids: return []
+        q = select(Assignment).where(Assignment.resource_type == 'labour', Assignment.resource_id.in_(l_ids))
+        res2 = await db.execute(q)
+        return res2.scalars().all()
+    return []
+
+async def complete_assignment(db: AsyncSession, assignment_id: int):
+    res = await db.execute(select(Assignment).where(Assignment.id == assignment_id))
+    assign = res.scalar_one_or_none()
+    if not assign: return None
+    
+    # Mark task completed
+    assign.status = 'completed'
+    
+    # Cascade mark original request completed
+    req_res = await db.execute(select(Request).where(Request.id == assign.request_id))
+    req = req_res.scalar_one_or_none()
+    if req:
+        req.status = RequestStatus.COMPLETED
+        
+    await db.commit()
+    return assign
