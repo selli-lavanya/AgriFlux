@@ -1,13 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import api from "../lib/api";
+import Link from "next/link";
 import { useAuthStore } from "../store/authStore";
 
 export default function Home() {
   const [healthStatus, setHealthStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const { token, role } = useAuthStore();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const pingServer = async () => {
     setLoading(true);
@@ -41,14 +47,14 @@ export default function Home() {
           <p className="text-neutral-500 font-bold uppercase tracking-wider mb-2">Zustand Internal State</p>
           <div className="flex justify-between items-center px-4 py-2 bg-black/40 rounded-lg shadow-inner">
             <span className="text-neutral-400">Memory Token:</span>
-            <span className={token ? "text-emerald-400 font-mono" : "text-rose-400 font-mono"}>
-              {token ? "Token Active" : "NULL"}
+            <span className={mounted && token ? "text-emerald-400 font-mono" : "text-rose-400 font-mono"}>
+              {mounted && token ? "Token Active" : "NULL"}
             </span>
           </div>
           <div className="flex justify-between items-center px-4 py-2 mt-2 bg-black/40 rounded-lg shadow-inner">
             <span className="text-neutral-400">Current Role:</span>
-            <span className={role ? "text-cyan-400 font-mono uppercase" : "text-rose-400 font-mono uppercase"}>
-              {role ? role : "UNAUTHORIZED"}
+            <span className={mounted && role ? "text-cyan-400 font-mono uppercase" : "text-rose-400 font-mono uppercase"}>
+              {mounted && role ? role : "UNAUTHORIZED"}
             </span>
           </div>
         </div>
@@ -68,6 +74,11 @@ export default function Home() {
             )}
           </span>
         </button>
+
+        <div className="grid grid-cols-2 gap-4 mt-8">
+          <Link href="/auth/login" className="py-3 px-6 text-center rounded-xl font-bold tracking-wide border border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/10 transition-colors">LOGIN</Link>
+          <Link href="/auth/signup" className="py-3 px-6 text-center rounded-xl font-bold tracking-wide border border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/10 transition-colors">SIGNUP</Link>
+        </div>
 
         {/* Dynamic Axios Network Response Text */}
         {healthStatus && (
