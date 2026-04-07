@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.api.responses import SuccessResponse
 from app.core.exceptions import AgriFluxException, agriflux_exception_handler
@@ -9,6 +10,15 @@ def get_application() -> FastAPI:
         title=settings.PROJECT_NAME,
         version=settings.VERSION,
         openapi_url=f"{settings.API_V1_STR}/openapi.json"
+    )
+
+    # CORS Blocks Browser rejections when calling API from localhost:3000
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
 
     # Add exception handlers
