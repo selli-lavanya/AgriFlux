@@ -15,9 +15,10 @@ export default function DashboardPage() {
   const [machines, setMachines] = useState<any[]>([]);
   const [labourTeams, setLabourTeams] = useState<any[]>([]);
   const [assignments, setAssignments] = useState<any[]>([]);
+  const [calendar, setCalendar] = useState<any[]>([]);
   
   // Modals / Form State
-  const [activeTab, setActiveTab] = useState<'overview' | 'farms' | 'requests' | 'machines' | 'labour' | 'dispatcher' | 'tasks'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'farms' | 'requests' | 'machines' | 'labour' | 'dispatcher' | 'tasks' | 'calendar'>('overview');
   const [farmForm, setFarmForm] = useState({ name: '', size_acres: '', crop_type: '', crop_stage: 'Vegetative', location_lat: '28.61', location_lng: '77.20' });
   const [reqForm, setReqForm] = useState({ farm_id: '', type: 'machine', required_by_date: '' });
   const [machineForm, setMachineForm] = useState({ type: 'Harvester', capacity_per_day: '' });
@@ -35,6 +36,8 @@ export default function DashboardPage() {
     try {
       const profileRes = await api.get('/auth/me');
       setProfileData(profileRes.data);
+      const calRes = await api.get('/assignments/availability');
+      setCalendar(calRes.data);
       
       if (profileRes.data.role === 'farmer') {
         const [farmsRes, reqRes] = await Promise.all([api.get('/farms/'), api.get('/requests/me')]);
@@ -131,7 +134,7 @@ export default function DashboardPage() {
       });
       alert("Match Successfully Authenticated & Sent!");
       loadDashboardData();
-    } catch (err) { alert("Failed to secure mapping contract!"); }
+    } catch (err: any) { alert(err.response?.data?.detail || "Failed to secure mapping contract!"); }
   };
 
   if (!profileData) return <div className="min-h-screen bg-neutral-950 flex items-center justify-center text-emerald-500 animate-pulse font-mono">Syncing Cortex...</div>;
@@ -142,6 +145,7 @@ export default function DashboardPage() {
       <aside className="w-64 bg-neutral-900 border-r border-neutral-800 flex flex-col p-6 space-y-4">
         <h2 className="text-2xl font-black bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 to-cyan-500 mb-8">AgriFlux</h2>
         <button onClick={() => setActiveTab('overview')} className={`text-left px-4 py-3 rounded-xl font-bold transition-colors ${activeTab === 'overview' ? 'bg-emerald-900/40 text-emerald-400 border border-emerald-500/30' : 'text-neutral-500 hover:bg-neutral-800'}`}>Overview</button>
+        <button onClick={() => setActiveTab('calendar')} className={`text-left px-4 py-3 rounded-xl font-bold transition-colors ${activeTab === 'calendar' ? 'bg-fuchsia-900/40 text-fuchsia-400 border border-fuchsia-500/30' : 'text-neutral-500 hover:bg-neutral-800'}`}>Availability Engine</button>
         {role === 'farmer' && (
           <>
             <button onClick={() => setActiveTab('farms')} className={`text-left px-4 py-3 rounded-xl font-bold transition-colors ${activeTab === 'farms' ? 'bg-cyan-900/40 text-cyan-400 border border-cyan-500/30' : 'text-neutral-500 hover:bg-neutral-800'}`}>My Farms</button>
@@ -183,6 +187,31 @@ export default function DashboardPage() {
                  <button onClick={executeEngineTrigger} className="bg-emerald-500 text-black px-6 py-3 font-bold rounded-xl mt-2 hover:bg-emerald-400 transition-colors shadow-lg">Run Priority Recalculation Engine</button>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Phase 14: Availability Calendar Core */}
+        {activeTab === 'calendar' && (
+          <div className="space-y-6">
+            <h3 className="text-2xl font-bold text-fuchsia-400 border-b border-neutral-800 pb-4">7-Day Supply / Demand Projection</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {calendar.map((day, idx) => (
+                <div key={idx} className="bg-neutral-900 border border-fuchsia-900/30 rounded-2xl p-6 shadow-xl relative overflow-hidden">
+                  <div className={`absolute top-0 w-full h-1 left-0 ${day.machines.available === 0 || day.labour.available === 0 ? 'bg-rose-500 shadow-[0_0_10px_red]' : 'bg-fuchsia-500'}`} />
+                  <h4 className="text-xl text-white font-black uppercase tracking-widest mb-4">{new Date(day.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</h4>
+                  <div className="space-y-4">
+                    <div className="bg-black/50 p-3 rounded-xl border border-neutral-800">
+                      <p className="text-xs text-neutral-500 font-bold uppercase mb-1">Machinery Network Matrix</p>
+                      <p className="text-lg font-bold text-amber-400">{day.machines.available} <span className="text-xs text-neutral-500">Available</span> / {day.machines.booked} <span className="text-xs text-rose-500">Booked</span></p>
+                    </div>
+                    <div className="bg-black/50 p-3 rounded-xl border border-neutral-800">
+                      <p className="text-xs text-neutral-500 font-bold uppercase mb-1">Labour Network Matrix</p>
+                      <p className="text-lg font-bold text-rose-400">{day.labour.available} <span className="text-xs text-neutral-500">Available</span> / {day.labour.booked} <span className="text-xs text-rose-500">Booked</span></p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

@@ -2,6 +2,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from app.models.operations import Request, Assignment, RequestStatus
 from app.schemas.operations import RequestCreate, AssignmentCreate
+from fastapi import HTTPException
+from sqlalchemy import func, cast, Date
 
 async def create_request(db: AsyncSession, request_in: RequestCreate, farmer_id: int) -> Request:
     # Baseline logic, priority score matching engine to be built here later
@@ -26,6 +28,18 @@ async def get_all_pending_requests(db: AsyncSession):
     return result.scalars().all()
 
 async def create_assignment(db: AsyncSession, assign_in: AssignmentCreate) -> Assignment:
+    # Phase 14: Conflict Engine Check
+    target_date = assign_in.scheduled_date.date()
+    conflict_query = select(Assignment).where(
+        Assignment.resource_type == assign_in.resource_type,
+        Assignment.resource_id == assign_in.resource_id,
+        cast(Assignment.scheduled_date, Date) == target_date,
+        Assignment.status != 'completed'
+    )
+    result = await db.execute(conflict_query)
+    if result.scalars().first():
+        raise HTTPException(status_code=400, detail="Conflict Detected: Assuring Zero Collisions - Resource is already heavily assigned on this exact terrestrial date!")
+
     db_obj = Assignment(**assign_in.model_dump())
     db.add(db_obj)
     
