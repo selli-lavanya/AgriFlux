@@ -14,3 +14,8 @@ async def get_farms_by_farmer(db: AsyncSession, farmer_id: int):
     query = select(Farm).where(Farm.farmer_id == farmer_id)
     result = await db.execute(query)
     return result.scalars().all()
+
+async def get_all_farms(db: AsyncSession):
+    query = select(Farm)
+    result = await db.execute(query)
+    return result.scalars().all()

@@ -12,6 +12,8 @@ class Farm(Base):
     size_acres = Column(Float, nullable=False)
     location_lat = Column(Float, nullable=False)
     location_lng = Column(Float, nullable=False)
+    location_label = Column(String, nullable=True)
+    full_address = Column(String, nullable=True)
     crop_type = Column(String, nullable=False)
     crop_stage = Column(String, nullable=False)  # MVP: manually entered stage
     created_at = Column(DateTime(timezone=True), server_default=func.now())

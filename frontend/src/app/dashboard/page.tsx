@@ -4,6 +4,11 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import api from '@/lib/api';
+import dynamic from 'next/dynamic';
+import { fetchAddressFromCoordinates } from '@/lib/geocoder';
+
+const LeafletMap = dynamic(() => import('@/components/MapOverlay'), { ssr: false });
+const LocationPickerMap = dynamic(() => import('@/components/LocationPickerMap'), { ssr: false });
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -17,9 +22,15 @@ export default function DashboardPage() {
   const [assignments, setAssignments] = useState<any[]>([]);
   const [calendar, setCalendar] = useState<any[]>([]);
   
+  // Phase 10 & 16 Farm Registry State
+  const [newFarm, setNewFarm] = useState({ 
+    name: '', size_acres: '', location_lat: 28.6139, location_lng: 77.2090, 
+    location_label: '', full_address: '', crop_type: '', crop_stage: 'Sowing' 
+  });
+  const [isResolvingAddress, setIsResolvingAddress] = useState(false);
+  
   // Modals / Form State
   const [activeTab, setActiveTab] = useState<'overview' | 'farms' | 'requests' | 'machines' | 'labour' | 'dispatcher' | 'tasks' | 'calendar'>('overview');
-  const [farmForm, setFarmForm] = useState({ name: '', size_acres: '', crop_type: '', crop_stage: 'Vegetative', location_lat: '28.61', location_lng: '77.20' });
   const [reqForm, setReqForm] = useState({ farm_id: '', type: 'machine', required_by_date: '' });
   const [machineForm, setMachineForm] = useState({ type: 'Harvester', capacity_per_day: '' });
   const [labourForm, setLabourForm] = useState({ worker_count: '', skills: 'Manual Harvesting' });
@@ -54,14 +65,16 @@ export default function DashboardPage() {
         setAssignments(assignRes.data);
       } else if (profileRes.data.role === 'admin') {
         // Phase 12: Admin specific fetches
-        const [pendRes, allMachRes, allLabRes] = await Promise.all([
+        const [pendRes, allMachRes, allLabRes, allFarmsRes] = await Promise.all([
           api.get('/requests/pending'),
           api.get('/machines/all'),
-          api.get('/labour/all')
+          api.get('/labour/all'),
+          api.get('/farms/all') // Phase 15 Global mapping
         ]);
         setRequests(pendRes.data);
         setMachines(allMachRes.data);
         setLabourTeams(allLabRes.data);
+        setFarms(allFarmsRes.data);
       }
     } catch {
       logout();
@@ -73,10 +86,47 @@ export default function DashboardPage() {
   const handleCreateFarm = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.post('/farms/', { ...farmForm, size_acres: parseFloat(farmForm.size_acres), location_lat: parseFloat(farmForm.location_lat), location_lng: parseFloat(farmForm.location_lng) });
-      alert("Farm Registered!");
-      loadDashboardData();
-    } catch (err) { alert("Failed to register farm."); }
+      const payload = {
+        name: newFarm.name,
+        size_acres: parseFloat(newFarm.size_acres),
+        location_lat: Number(newFarm.location_lat),
+        location_lng: Number(newFarm.location_lng),
+        location_label: newFarm.location_label || null,
+        full_address: newFarm.full_address || null,
+        crop_type: newFarm.crop_type,
+        crop_stage: newFarm.crop_stage
+      };
+      await api.post('/farms/', payload);
+      const farmsRes = await api.get('/farms/');
+      setFarms(farmsRes.data);
+      setNewFarm({ name: '', size_acres: '', location_lat: 28.6139, location_lng: 77.2090, location_label: '', full_address: '', crop_type: '', crop_stage: 'Sowing' });
+      alert("Farm Registered With Verifiable Location Intelligence!");
+    } catch {
+      alert("Registration failed");
+    }
+  };
+
+  const executeBrowserGPS = () => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition((pos) => {
+        handleMapCoordinateChange(pos.coords.latitude, pos.coords.longitude);
+      }, () => alert("GPS Permission Denied. Drag the pin manually."));
+    }
+  };
+
+  const handleMapCoordinateChange = async (lat: number, lng: number) => {
+    setNewFarm(prev => ({ ...prev, location_lat: lat, location_lng: lng }));
+  };
+
+  const resolveSemanticAddress = async () => {
+    setIsResolvingAddress(true);
+    const data = await fetchAddressFromCoordinates(newFarm.location_lat, newFarm.location_lng);
+    setIsResolvingAddress(false);
+    if (data) {
+       setNewFarm(prev => ({ ...prev, full_address: data.address, location_label: prev.location_label || data.label }));
+    } else {
+       alert("Target resides in an unmapped sector entirely.");
+    }
   };
 
   const handleCreateRequest = async (e: React.FormEvent) => {
@@ -217,27 +267,62 @@ export default function DashboardPage() {
 
         {/* Farmer Tabs */}
         {activeTab === 'farms' && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-8">
-                <h3 className="text-xl font-bold mb-6 text-cyan-400">Register New Farm</h3>
-                <form onSubmit={handleCreateFarm} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <input required placeholder="Farm Name" className="col-span-2 bg-black border border-neutral-800 p-3 rounded-xl text-sm" value={farmForm.name} onChange={e => setFarmForm({...farmForm, name: e.target.value})} />
-                    <input required type="number" step="0.1" placeholder="Size (Acres)" className="bg-black border border-neutral-800 p-3 rounded-xl text-sm" value={farmForm.size_acres} onChange={e => setFarmForm({...farmForm, size_acres: e.target.value})} />
-                    <input required placeholder="Crop Type" className="bg-black border border-neutral-800 p-3 rounded-xl text-sm" value={farmForm.crop_type} onChange={e => setFarmForm({...farmForm, crop_type: e.target.value})} />
-                    <select className="col-span-2 bg-black border border-neutral-800 p-3 rounded-xl text-sm text-neutral-300" value={farmForm.crop_stage} onChange={e => setFarmForm({...farmForm, crop_stage: e.target.value})}>
-                      <option value="Vegetative">Vegetative</option>
-                      <option value="Harvest-Ready">Harvest-Ready</option>
-                    </select>
-                  </div>
-                  <button type="submit" className="w-full bg-cyan-600/20 text-cyan-400 font-bold py-3 rounded-xl outline-none hover:bg-cyan-500 hover:text-black transition-colors">Register Terrain</button>
-                </form>
-              </div>
-              <div className="space-y-4">
-                <h3 className="text-xl font-bold text-white mb-6">Registered Database</h3>
-                {farms.map(farm => (
-                  <div key={farm.id} className="bg-black/50 border border-neutral-800 p-5 rounded-2xl flex justify-between group">
-                    <div><h4 className="font-bold text-emerald-100">{farm.name}</h4><p className="text-xs text-neutral-500">{farm.size_acres} Acres</p></div>
+            <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-8">
+              <h3 className="text-xl font-bold mb-6 text-emerald-400">Register New Farm Operation</h3>
+              <form onSubmit={handleCreateFarm} className="space-y-6">
+                
+                {/* Core Attributes */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <input type="text" placeholder="Farm Name (e.g. Omega Fields)" className="w-full bg-black/50 border border-neutral-700/50 p-3 rounded-xl focus:border-emerald-500 focus:outline-none" value={newFarm.name} onChange={e => setNewFarm({...newFarm, name: e.target.value})} required />
+                  <input type="number" placeholder="Size (Acres)" className="w-full bg-black/50 border border-neutral-700/50 p-3 rounded-xl focus:border-emerald-500 focus:outline-none" value={newFarm.size_acres} onChange={e => setNewFarm({...newFarm, size_acres: e.target.value})} required />
+                  <input type="text" placeholder="Crop Type (e.g. Wheat, Rice)" className="w-full bg-black/50 border border-neutral-700/50 p-3 rounded-xl focus:border-emerald-500 focus:outline-none" value={newFarm.crop_type} onChange={e => setNewFarm({...newFarm, crop_type: e.target.value})} required />
+                  <select className="w-full bg-black/50 border border-neutral-700/50 p-3 rounded-xl focus:border-emerald-500 focus:outline-none text-neutral-300" value={newFarm.crop_stage} onChange={e => setNewFarm({...newFarm, crop_stage: e.target.value})}>
+                    <option value="Sowing">Sowing Phase</option>
+                    <option value="Vegetative">Vegetative Phase</option>
+                    <option value="Harvesting">Harvesting Phase</option>
+                  </select>
+                </div>
+
+                {/* Location Intelligence Canvas */}
+                <div className="mt-8 border border-neutral-800 rounded-2xl overflow-hidden bg-black/50">
+                   <div className="flex flex-col md:flex-row justify-between items-center p-4 border-b border-neutral-800 bg-neutral-900/50">
+                      <h4 className="text-sm font-bold text-gray-300">Geospatial Target</h4>
+                      <button type="button" onClick={executeBrowserGPS} className="mt-2 md:mt-0 text-xs font-bold bg-blue-600/20 text-blue-400 hover:bg-blue-600/40 px-3 py-1.5 rounded transition">
+                        📡 Ping Mobile GPS
+                      </button>
+                   </div>
+                   <div className="grid grid-cols-1 lg:grid-cols-2">
+                       <div className="h-[250px] w-full bg-neutral-800">
+                          <LocationPickerMap lat={newFarm.location_lat} lng={newFarm.location_lng} onChange={handleMapCoordinateChange} />
+                       </div>
+                       <div className="p-6 space-y-4 flex flex-col justify-center">
+                          <button type="button" onClick={resolveSemanticAddress} disabled={isResolvingAddress} className="w-full bg-emerald-600/20 text-emerald-400 border border-emerald-900/50 hover:bg-emerald-600/40 font-bold text-sm py-2 rounded-lg transition text-center mb-2 disabled:opacity-50">
+                            {isResolvingAddress ? "Resolving OpenStreetMap..." : "Extract Semantic Address"}
+                          </button>
+                          <div>
+                            <label className="text-[10px] font-bold text-gray-500 uppercase">Sector Label (Override)</label>
+                            <input type="text" placeholder="e.g. North River Block" className="w-full mt-1 bg-black/80 border border-neutral-800 p-2 rounded focus:border-emerald-500 focus:outline-none text-sm" value={newFarm.location_label} onChange={e => setNewFarm({...newFarm, location_label: e.target.value})} />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-bold text-gray-500 uppercase">Verifiable Logistics Address</label>
+                            <textarea rows={2} placeholder="Resolves automatically via Geocoder..." className="w-full mt-1 bg-black/80 border border-neutral-800 p-2 rounded focus:border-emerald-500 focus:outline-none text-xs text-gray-400" value={newFarm.full_address} onChange={e => setNewFarm({...newFarm, full_address: e.target.value})} />
+                          </div>
+                       </div>
+                   </div>
+                </div>
+
+                <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 mt-4 rounded-xl transition-all shadow-lg hover:shadow-emerald-500/30">Commit Farm to Matrix</button>
+              </form>
+
+              <div className="mt-12 space-y-4">
+                <h3 className="text-xl font-bold mb-4 border-b border-neutral-800 pb-2">Active Territories</h3>
+                {farms.map(f => (
+                  <div key={f.id} className="bg-neutral-800/50 p-4 rounded-2xl flex justify-between items-center border border-neutral-800">
+                    <div>
+                      <h4 className="font-bold text-emerald-400">{f.location_label ? `${f.name} (${f.location_label})` : f.name}</h4>
+                      <p className="text-xs text-neutral-400 font-mono mt-1">[{f.location_lat.toFixed(4)}, {f.location_lng.toFixed(4)}] • {f.size_acres} Acres • {f.crop_type}</p>
+                      {f.full_address && <p className="text-[10px] text-gray-500 mt-1 uppercase max-w-lg truncate">{f.full_address}</p>}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -246,6 +331,12 @@ export default function DashboardPage() {
 
         {activeTab === 'requests' && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Map Layer for farmers */}
+              <div className="lg:col-span-2 h-[450px] w-full rounded-2xl overflow-hidden shadow-2xl relative border border-indigo-900/30">
+                 <div className="absolute top-2 left-2 z-[500] bg-black/80 p-2 rounded-lg text-xs font-bold uppercase tracking-widest text-indigo-400 border border-indigo-900/50">My Farm Intelligence Map</div>
+                 <LeafletMap requests={requests} farms={farms} machines={machines} labourTeams={labourTeams} role={role || ''} />
+              </div>
+              
               <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-8">
                 <h3 className="text-xl font-bold mb-6 text-indigo-400">Deploy Request</h3>
                 <form onSubmit={handleCreateRequest} className="space-y-4">
@@ -355,6 +446,13 @@ export default function DashboardPage() {
         {activeTab === 'dispatcher' && role === 'admin' && (
             <div className="space-y-8">
               <h3 className="text-2xl font-bold text-purple-400 border-b border-neutral-800 pb-4">Global Queue Map</h3>
+              
+              {/* Core Map */}
+              <div className="w-full h-[550px] bg-neutral-900 border border-purple-900/50 rounded-2xl relative shadow-[0_0_20px_rgba(168,85,247,0.15)] overflow-hidden">
+                <div className="absolute top-2 left-2 z-[500] bg-black/80 p-2 rounded-lg text-xs font-bold uppercase tracking-widest text-purple-400 border border-purple-900/50">Admin Spatial Overseer</div>
+                <LeafletMap requests={requests} farms={farms} machines={machines} labourTeams={labourTeams} role={role} />
+              </div>
+
               {requests.map(req => (
                 <div key={req.id} className="bg-neutral-900 border border-purple-900/30 p-6 rounded-3xl flex flex-col md:flex-row gap-6 shadow-xl">
                   

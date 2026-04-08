@@ -1,0 +1,26 @@
+/* Make the popups look clean and light */
+.leaflet-popup.clean-popup .leaflet-popup-content-wrapper {
+  padding: 0;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+}
+
+.leaflet-popup.clean-popup .leaflet-popup-content {
+  margin: 0 !important;
+  width: auto !important;
+}
+
+/* Let the tip stay normal but match background */
+.leaflet-popup.clean-popup .leaflet-popup-tip {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-top: none;
+  border-left: none;
+}
+
+/* Optional: hide close button since users can just click outside */
+.leaflet-popup.clean-popup .leaflet-popup-close-button {
+  display: none;
+}

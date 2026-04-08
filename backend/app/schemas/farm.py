@@ -7,6 +7,8 @@ class FarmBase(BaseModel):
     size_acres: float
     location_lat: float
     location_lng: float
+    location_label: Optional[str] = None
+    full_address: Optional[str] = None
     crop_type: str
     crop_stage: str
 

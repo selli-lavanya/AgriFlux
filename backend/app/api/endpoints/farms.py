@@ -25,3 +25,10 @@ async def read_my_farms(
     current_user: User = Depends(farmer_only)
 ):
     return await farm_service.get_farms_by_farmer(db, farmer_id=current_user.id)
+
+@router.get("/all", response_model=List[FarmOut])
+async def read_all_farms(
+    db: AsyncSession = Depends(get_db), 
+    current_user: User = Depends(RoleChecker([UserRole.ADMIN]))
+):
+    return await farm_service.get_all_farms(db)
