@@ -9,6 +9,7 @@ import { fetchAddressFromCoordinates } from '@/lib/geocoder';
 
 const LeafletMap = dynamic(() => import('@/components/MapOverlay'), { ssr: false });
 const LocationPickerMap = dynamic(() => import('@/components/LocationPickerMap'), { ssr: false });
+import CopilotWidget from '@/components/CopilotWidget';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -486,6 +487,7 @@ export default function DashboardPage() {
         )}
 
       </main>
+      <CopilotWidget />
     </div>
   );
 }

@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     
     # Optional Third-party APIs
     OPENWEATHER_API_KEY: Optional[str] = None
+    GEMINI_API_KEY: Optional[str] = None
+    GEMINI_MODEL: str = "gemini-1.5-flash"
     
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True, extra="ignore")
 

@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.api.responses import SuccessResponse
 from app.core.exceptions import AgriFluxException, agriflux_exception_handler
-from app.api.endpoints import auth, farms, machines, labour, requests, assignments, alerts
+from app.api.endpoints import auth, farms, machines, labour, requests, assignments, alerts, copilot
 
 def get_application() -> FastAPI:
     application = FastAPI(
@@ -32,6 +32,7 @@ def get_application() -> FastAPI:
     application.include_router(requests.router, prefix=f"{settings.API_V1_STR}/requests", tags=["requests"])
     application.include_router(assignments.router, prefix=f"{settings.API_V1_STR}/assignments", tags=["assignments"])
     application.include_router(alerts.router, prefix=f"{settings.API_V1_STR}/alerts", tags=["alerts"])
+    application.include_router(copilot.router, prefix=f"{settings.API_V1_STR}/copilot", tags=["copilot"])
 
     return application
 
