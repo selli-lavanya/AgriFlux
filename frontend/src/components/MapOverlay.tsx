@@ -116,7 +116,14 @@ export default function MapOverlay({ requests = [], farms = [], machines = [], l
 
   return (
     <div className="relative w-full h-full font-sans bg-neutral-200">
-      <MapContainer center={[opCenterLat, opCenterLng]} zoom={11} maxZoom={19} scrollWheelZoom={true} className="w-full h-full z-0 font-sans">
+      <MapContainer 
+        key={`map-${opCenterLat}-${opCenterLng}`}
+        center={[opCenterLat, opCenterLng]} 
+        zoom={11} 
+        maxZoom={19} 
+        scrollWheelZoom={true} 
+        className="w-full h-full z-0 font-sans"
+      >
         
         {/* Lighter Testing Basemap (Carto Voyager) - Max Zoom 19 */}
         <TileLayer

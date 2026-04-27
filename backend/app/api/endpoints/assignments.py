@@ -50,25 +50,37 @@ async def get_system_availability(db: AsyncSession = Depends(get_db)):
     lc_res = await db.execute(select(func.count(LabourTeam.id)))
     total_labour = lc_res.scalar() or 0
     
+    from sqlalchemy import cast, Date
+    
     # Query all active network demands
     query = select(Assignment).where(Assignment.status != 'completed')
     assigns = await db.execute(query)
     active = assigns.scalars().all()
     
     calendar = {}
+    # Use UTC-aware date for baseline to avoid shifting offsets
     base_date = datetime.now().date()
     
     for i in range(7):
         target = base_date + timedelta(days=i)
-        date_str = target.isoformat()
+        target_str = target.isoformat()
         
+        # Count using exact date match
         m_booked = sum(1 for a in active if a.scheduled_date.date() == target and a.resource_type == 'machine')
         l_booked = sum(1 for a in active if a.scheduled_date.date() == target and a.resource_type == 'labour')
         
-        calendar[date_str] = {
-            "date": date_str,
-            "machines": {"total": total_machines, "booked": m_booked, "available": total_machines - m_booked},
-            "labour": {"total": total_labour, "booked": l_booked, "available": total_labour - l_booked}
+        calendar[target_str] = {
+            "date": target_str,
+            "machines": {
+                "total": total_machines, 
+                "booked": m_booked, 
+                "available": max(0, total_machines - m_booked)
+            },
+            "labour": {
+                "total": total_labour, 
+                "booked": l_booked, 
+                "available": max(0, total_labour - l_booked)
+            }
         }
         
     return list(calendar.values())

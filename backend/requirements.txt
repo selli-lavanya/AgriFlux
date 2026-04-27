@@ -13,3 +13,4 @@ bcrypt
 python-multipart
 httpx
 google-genai
+sse-starlette
