@@ -94,8 +94,21 @@ export default function CopilotWidget() {
           
           <div className="flex-1 h-80 overflow-y-auto p-4 space-y-4">
             {history.length === 0 && (
-               <div className="text-center text-neutral-500 text-xs italic mt-10 p-4">
-                 Awaiting query. Try asking:<br/> "Which farms need harvesters?"<br/>"What is the network availability?"
+               <div className="flex flex-col items-center justify-center h-full text-center p-4">
+                  <div className="w-12 h-12 bg-indigo-500/10 rounded-full flex items-center justify-center mb-4 text-2xl">🤖</div>
+                  <p className="text-neutral-300 font-bold text-sm mb-2">Systems Online</p>
+                  <p className="text-neutral-500 text-xs mb-6 max-w-[200px]">I can help you analyze farm risks, resource availability, and dispatch status.</p>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    {["Which farms need help?", "Show machine availability", "High risk sectors"].map(q => (
+                      <button 
+                        key={q} 
+                        onClick={() => { setInput(q); }}
+                        className="text-[10px] bg-indigo-900/30 border border-indigo-500/20 text-indigo-400 px-3 py-1.5 rounded-full hover:bg-indigo-600 hover:text-white transition"
+                      >
+                        {q}
+                      </button>
+                    ))}
+                  </div>
                </div>
             )}
             {history.map((msg, idx) => (

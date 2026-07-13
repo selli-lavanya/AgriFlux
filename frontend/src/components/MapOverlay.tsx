@@ -46,7 +46,7 @@ function BoundFitter({ markers }: { markers: {lat: number, lng: number}[] }) {
   useEffect(() => {
     if (markers && markers.length > 0) {
       const bounds = L.latLngBounds(markers.map(m => [m.lat, m.lng]));
-      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 17 });
+      map.fitBounds(bounds, { padding: [80, 80], maxZoom: 16 });
     }
   }, [markers, map]);
   return null;
@@ -141,15 +141,15 @@ export default function MapOverlay({ requests = [], farms = [], machines = [], l
               <div className="p-2 w-[240px]">
                 <div className="flex items-center gap-2 mb-2 pb-2 border-b border-gray-200">
                    <span className="text-xl">{f.risk > 50 ? '⚠️' : '🌱'}</span>
-                   <div>
-                      <h4 className="font-extrabold text-gray-900 capitalize text-base m-0 leading-tight">{f.label ? `${f.name} (${f.label})` : f.name}</h4>
-                      <p className="text-[10px] text-gray-500 font-mono mt-1 mb-0 leading-tight">GPS: [{f.lat.toFixed(4)}, {f.lng.toFixed(4)}]</p>
-                      {f.address ? (
-                        <p className="text-[10px] font-bold text-indigo-600 mt-1 uppercase max-w-[200px] leading-tight truncate">{f.address}</p>
-                      ) : (
-                        <p className="text-[10px] text-gray-400 italic m-0">Raw Topology (No Address Mapping)</p>
-                      )}
-                   </div>
+                       <div>
+                          <h4 className="font-extrabold text-gray-900 capitalize text-base m-0 leading-tight">{f.label ? `${f.name} (${f.label})` : f.name}</h4>
+                          <p className="text-[10px] text-gray-500 font-mono mt-1 mb-0 leading-tight">GPS: [{f.lat.toFixed(4)}, {f.lng.toFixed(4)}]</p>
+                          {f.address ? (
+                            <p className="text-[10px] font-bold text-indigo-600 mt-1 uppercase max-w-[200px] leading-tight truncate">{f.address}</p>
+                          ) : (
+                            <p className="text-[10px] text-neutral-400 font-black mt-1 uppercase tracking-widest">Address mapping pending</p>
+                          )}
+                       </div>
                 </div>
 
                 {f.reqs.length > 0 ? (

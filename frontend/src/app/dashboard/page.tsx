@@ -51,7 +51,7 @@ export default function DashboardPage() {
   useEffect(() => {
     if (notifications.length > 0) {
       const latest = notifications[0];
-      const relevantEvents = ['NEW_REQUEST', 'ASSIGNMENT_CREATED', 'ASSIGNMENT_COMPLETED'];
+      const relevantEvents = ['NEW_REQUEST', 'ASSIGNMENT_CREATED', 'ASSIGNMENT_COMPLETED', 'FARM_CREATED', 'FARM_DELETED'];
       if (relevantEvents.includes(latest.event_type)) {
         loadDashboardData();
       }
@@ -146,6 +146,33 @@ export default function DashboardPage() {
     setNewFarm(prev => ({ ...prev, location_lat: lat, location_lng: lng }));
   };
 
+  const handleDeleteFarm = async (farmId: number) => {
+    try {
+      await api.delete(`/farms/${farmId}?confirm=true`);
+      addNotification({
+        id: `farm-purge-${Date.now()}`,
+        event_type: 'FARM_SUCCESS',
+        entity_type: 'farm',
+        entity_id: 0,
+        message: "Territory and associated logistics purged from Matrix.",
+        timestamp: new Date().toISOString(),
+        read: false
+      });
+      loadDashboardData();
+    } catch (err: any) {
+      const msg = err.response?.data?.message || "Purge Restricted: Operational links active.";
+      addNotification({
+        id: `farm-err-${Date.now()}`,
+        event_type: 'FARM_ERROR',
+        entity_type: 'farm',
+        entity_id: 0,
+        message: msg,
+        timestamp: new Date().toISOString(),
+        read: false
+      });
+    }
+  };
+
   const resolveSemanticAddress = async () => {
     setIsResolvingAddress(true);
     const data = await fetchAddressFromCoordinates(newFarm.location_lat, newFarm.location_lng);
@@ -179,13 +206,14 @@ export default function DashboardPage() {
         read: false
       });
       loadDashboardData();
-    } catch (err) { 
+    } catch (err: any) { 
+      const msg = err.response?.data?.message || err.response?.data?.detail || "Failed to create request.";
       addNotification({
         id: `req-err-${Date.now()}`,
         event_type: 'REQUEST_ERROR',
         entity_type: 'req',
         entity_id: 0,
-        message: "Failed to create request. Engine offline.",
+        message: msg,
         timestamp: new Date().toISOString(),
         read: false
       });
@@ -430,12 +458,13 @@ export default function DashboardPage() {
         {activeTab === 'overview' && (
           <div className="space-y-8">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl shadow-xl">
-                <h3 className="text-neutral-500 font-bold uppercase tracking-widest text-[10px] mb-4">Network Status</h3>
+              <div className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl shadow-xl hover:border-indigo-500/30 transition-all group">
+                <h3 className="text-neutral-500 font-bold uppercase tracking-widest text-[10px] mb-4">Command Center Status</h3>
                 <p className="text-emerald-400 flex items-center gap-3 text-sm font-bold">
                   <span className="relative flex h-3 w-3"><span className="animate-ping absolute h-full w-full rounded-full bg-emerald-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span></span>
-                  Cortex Online
+                  Uplink Stabilized
                 </p>
+                <p className="text-[10px] text-neutral-600 mt-2 font-mono uppercase">Encryption: AES-256 Verified</p>
               </div>
               {analytics && (
                 <>
@@ -498,41 +527,68 @@ export default function DashboardPage() {
             </div>
           </div>
         )}
-
         {activeTab === 'farms' && (
-            <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-8">
-              <h3 className="text-xl font-bold mb-6 text-emerald-400">Register New Farm Operation</h3>
-              <form onSubmit={handleCreateFarm} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <input type="text" placeholder="Farm Name" className="w-full bg-black/50 border border-neutral-700/50 p-3 rounded-xl focus:border-emerald-500 focus:outline-none" value={newFarm.name} onChange={e => setNewFarm({...newFarm, name: e.target.value})} required />
-                  <input type="number" placeholder="Size (Acres)" className="w-full bg-black/50 border border-neutral-700/50 p-3 rounded-xl focus:border-emerald-500 focus:outline-none" value={newFarm.size_acres} onChange={e => setNewFarm({...newFarm, size_acres: e.target.value})} required />
-                  <input type="text" placeholder="Crop Type" className="w-full bg-black/50 border border-neutral-700/50 p-3 rounded-xl focus:border-emerald-500 focus:outline-none" value={newFarm.crop_type} onChange={e => setNewFarm({...newFarm, crop_type: e.target.value})} required />
-                  <select className="w-full bg-black/50 border border-neutral-700/50 p-3 rounded-xl focus:border-emerald-500 focus:outline-none text-neutral-300" value={newFarm.crop_stage} onChange={e => setNewFarm({...newFarm, crop_stage: e.target.value})}>
-                    <option value="Sowing">Sowing Phase</option>
-                    <option value="Vegetative">Vegetative Phase</option>
-                    <option value="Harvesting">Harvesting Phase</option>
-                  </select>
-                </div>
-                <div className="mt-8 border border-neutral-800 rounded-2xl overflow-hidden bg-black/50">
-                   <div className="flex flex-col md:flex-row justify-between items-center p-4 border-b border-neutral-800 bg-neutral-900/50">
-                      <h4 className="text-sm font-bold text-gray-300">Geospatial Target</h4>
-                      <button type="button" onClick={executeBrowserGPS} className="mt-2 md:mt-0 text-xs font-bold bg-blue-600/20 text-blue-400 hover:bg-blue-600/40 px-3 py-1.5 rounded transition">📡 Ping Mobile GPS</button>
-                   </div>
-                   <div className="grid grid-cols-1 lg:grid-cols-2">
-                       <div className="h-[250px] w-full bg-neutral-800">
-                          <LocationPickerMap lat={newFarm.location_lat} lng={newFarm.location_lng} onChange={handleMapCoordinateChange} />
-                       </div>
-                       <div className="p-6 space-y-4 flex flex-col justify-center">
-                          <button type="button" onClick={resolveSemanticAddress} disabled={isResolvingAddress} className="w-full bg-emerald-600/20 text-emerald-400 border border-emerald-900/50 hover:bg-emerald-600/40 font-bold text-sm py-2 rounded-lg transition disabled:opacity-50">
-                            {isResolvingAddress ? "Resolving..." : "Extract Semantic Address"}
+            <div className="space-y-8">
+              <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-8">
+                <h3 className="text-xl font-bold mb-6 text-emerald-400">Register New Farm Operation</h3>
+                <form onSubmit={handleCreateFarm} className="space-y-6">
+                  {/* ... form content ... */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <input type="text" placeholder="Farm Name" className="w-full bg-black/50 border border-neutral-700/50 p-3 rounded-xl focus:border-emerald-500 focus:outline-none" value={newFarm.name} onChange={e => setNewFarm({...newFarm, name: e.target.value})} required />
+                    <input type="number" placeholder="Size (Acres)" className="w-full bg-black/50 border border-neutral-700/50 p-3 rounded-xl focus:border-emerald-500 focus:outline-none" value={newFarm.size_acres} onChange={e => setNewFarm({...newFarm, size_acres: e.target.value})} required />
+                    <input type="text" placeholder="Crop Type" className="w-full bg-black/50 border border-neutral-700/50 p-3 rounded-xl focus:border-emerald-500 focus:outline-none" value={newFarm.crop_type} onChange={e => setNewFarm({...newFarm, crop_type: e.target.value})} required />
+                    <select className="w-full bg-black/50 border border-neutral-700/50 p-3 rounded-xl focus:border-emerald-500 focus:outline-none text-neutral-300" value={newFarm.crop_stage} onChange={e => setNewFarm({...newFarm, crop_stage: e.target.value})}>
+                      <option value="Sowing">Sowing Phase</option>
+                      <option value="Vegetative">Vegetative Phase</option>
+                      <option value="Harvesting">Harvesting Phase</option>
+                    </select>
+                  </div>
+                  <div className="mt-8 border border-neutral-800 rounded-2xl overflow-hidden bg-black/50">
+                    <div className="flex flex-col md:flex-row justify-between items-center p-4 border-b border-neutral-800 bg-neutral-900/50">
+                        <h4 className="text-sm font-bold text-gray-300">Geospatial Target</h4>
+                        <button type="button" onClick={executeBrowserGPS} className="mt-2 md:mt-0 text-xs font-bold bg-blue-600/20 text-blue-400 hover:bg-blue-600/40 px-3 py-1.5 rounded transition">📡 Ping Mobile GPS</button>
+                    </div>
+                    <div className="grid grid-cols-1 lg:grid-cols-2">
+                        <div className="h-[250px] w-full bg-neutral-800">
+                            <LocationPickerMap lat={newFarm.location_lat} lng={newFarm.location_lng} onChange={handleMapCoordinateChange} />
+                        </div>
+                        <div className="p-6 space-y-4 flex flex-col justify-center">
+                            <button type="button" onClick={resolveSemanticAddress} disabled={isResolvingAddress} className="w-full bg-emerald-600/20 text-emerald-400 border border-emerald-900/50 hover:bg-emerald-600/40 font-bold text-sm py-2 rounded-lg transition disabled:opacity-50">
+                              {isResolvingAddress ? "Resolving..." : "Extract Semantic Address"}
+                            </button>
+                            <div><label className="text-[10px] font-bold text-gray-500 uppercase">Sector Label</label><input type="text" className="w-full mt-1 bg-black/80 border border-neutral-800 p-2 rounded focus:border-emerald-500 focus:outline-none text-sm" value={newFarm.location_label} onChange={e => setNewFarm({...newFarm, location_label: e.target.value})} /></div>
+                            <div><label className="text-[10px] font-bold text-gray-500 uppercase">Verifiable Address</label><textarea rows={2} className="w-full mt-1 bg-black/80 border border-neutral-800 p-2 rounded focus:border-emerald-500 focus:outline-none text-xs text-gray-400" value={newFarm.full_address} onChange={e => setNewFarm({...newFarm, full_address: e.target.value})} /></div>
+                        </div>
+                    </div>
+                  </div>
+                  <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 mt-4 rounded-xl transition-all">Commit Farm to Matrix</button>
+                </form>
+              </div>
+
+              <div className="space-y-4">
+                 <h3 className="text-xl font-bold text-neutral-400 px-2">Managed Territories</h3>
+                 {farms.length === 0 ? (
+                   <p className="text-neutral-600 italic px-2">No active farm nodes registered.</p>
+                 ) : (
+                   <div className="grid grid-cols-1 gap-4">
+                     {farms.map(f => (
+                       <div key={f.id} className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl flex justify-between items-center group hover:border-emerald-500/30 transition-all">
+                          <div>
+                            <h4 className="text-white font-bold text-lg">{f.name}</h4>
+                            <p className="text-xs text-neutral-500 font-mono mt-1 uppercase tracking-widest">{f.crop_type} • {f.size_acres} Acres</p>
+                            <p className="text-[10px] text-emerald-500/50 mt-2 font-bold">{f.full_address || "Address mapping pending"}</p>
+                          </div>
+                          <button 
+                            onClick={() => { if(window.confirm("Delete this Farm? All associated unassigned requests will be deleted.")) handleDeleteFarm(f.id); }}
+                            className="p-3 bg-rose-500/10 text-rose-500 rounded-xl hover:bg-rose-500 hover:text-white transition-all opacity-0 group-hover:opacity-100"
+                          >
+                            🗑️
                           </button>
-                          <div><label className="text-[10px] font-bold text-gray-500 uppercase">Sector Label</label><input type="text" className="w-full mt-1 bg-black/80 border border-neutral-800 p-2 rounded focus:border-emerald-500 focus:outline-none text-sm" value={newFarm.location_label} onChange={e => setNewFarm({...newFarm, location_label: e.target.value})} /></div>
-                          <div><label className="text-[10px] font-bold text-gray-500 uppercase">Verifiable Address</label><textarea rows={2} className="w-full mt-1 bg-black/80 border border-neutral-800 p-2 rounded focus:border-emerald-500 focus:outline-none text-xs text-gray-400" value={newFarm.full_address} onChange={e => setNewFarm({...newFarm, full_address: e.target.value})} /></div>
                        </div>
+                     ))}
                    </div>
-                </div>
-                <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 mt-4 rounded-xl transition-all">Commit Farm to Matrix</button>
-              </form>
+                 )}
+              </div>
             </div>
         )}
 
@@ -645,9 +701,12 @@ export default function DashboardPage() {
               {requests.map(req => (
                 <div key={req.id} className="bg-neutral-900 border border-purple-900/30 p-6 rounded-3xl flex flex-col md:flex-row gap-6">
                   <div className="flex-1">
-                    <span className="text-2xl font-black text-white">{req.priority_score.toFixed(1)} <span className="text-[10px] text-purple-500 uppercase">Score</span></span>
-                    <h4 className="font-bold uppercase text-neutral-300 mt-2">{req.type} Requirement</h4>
-                    <p className="text-xs text-neutral-400 mt-1">Farm ID: #{req.farm_id} • Due: {req.required_by_date ? req.required_by_date.split('T')[0] : 'TBD'}</p>
+                    <div className="flex items-center gap-3 mb-2">
+                       <span className="text-2xl font-black text-white">{req.priority_score.toFixed(1)}</span>
+                       <span className="text-[10px] text-purple-500 border border-purple-900/50 px-2 py-0.5 rounded-full uppercase font-black tracking-widest">Priority Index</span>
+                    </div>
+                    <h4 className="font-bold uppercase text-neutral-200 text-sm tracking-tight">{req.type} Logistics Pipeline</h4>
+                    <p className="text-[11px] text-neutral-500 mt-1 font-medium italic">Target: Farm Cluster #{req.farm_id} • Critical Window: {req.required_by_date ? req.required_by_date.split('T')[0] : 'TBD'}</p>
                   </div>
                   <div className="flex-1 bg-black/60 p-4 rounded-xl border border-neutral-800">
                     <h5 className="text-xs text-neutral-500 font-bold uppercase mb-4">Assign Resource</h5>
