@@ -13,6 +13,9 @@ class UserOut(UserBase):
     id: int
     is_active: bool
     created_at: datetime
+    late_cancel_count: int
+    no_show_count: int
+
 
     class Config:
         from_attributes = True

@@ -20,3 +20,4 @@ class Farm(Base):
     
     # Relationships
     farmer = relationship("User", backref="farms")
+    requests = relationship("Request", back_populates="farm", cascade="all, delete-orphan")

@@ -12,6 +12,11 @@ class AvailabilityCalendar(Base):
     status = Column(String, nullable=False) # 'available', 'booked'
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
+    # Phase 1b additions
+    temp_lock_until = Column(DateTime(timezone=True), nullable=True)
+    locked_by_request_id = Column(Integer, nullable=True)
+
+
 class Alert(Base):
     __tablename__ = "alerts"
 

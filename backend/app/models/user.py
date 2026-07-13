@@ -18,3 +18,8 @@ class User(Base):
     role = Column(SQLEnum(UserRole), nullable=False)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Phase 1 additions
+    late_cancel_count = Column(Integer, nullable=False, server_default='0')
+    no_show_count = Column(Integer, nullable=False, server_default='0')
+
