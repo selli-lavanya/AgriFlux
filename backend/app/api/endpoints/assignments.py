@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import func
@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from app.db.database import get_db
 from app.schemas.operations import AssignmentCreate, AssignmentOut
 from app.services import operations_service
-from app.api.deps import RoleChecker
+from app.api.deps import RoleChecker, get_current_user
 from app.models.user import User, UserRole
 
 router = APIRouter()
@@ -38,6 +38,52 @@ async def complete_task(
 ):
     return await operations_service.complete_assignment(db, assignment_id)
 
+@router.put("/{assignment_id}/cancel", response_model=AssignmentOut)
+async def cancel_task(
+    assignment_id: int,
+    reason: str,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    return await operations_service.cancel_assignment(
+        db, 
+        assignment_id=assignment_id, 
+        user_id=current_user.id, 
+        reason=reason,
+        background_tasks=background_tasks
+    )
+
+@router.put("/{assignment_id}/fail", response_model=AssignmentOut)
+async def fail_task(
+    assignment_id: int,
+    reason: str,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    return await operations_service.fail_assignment(
+        db,
+        assignment_id=assignment_id,
+        reason=reason,
+        background_tasks=background_tasks
+    )
+
+@router.put("/{assignment_id}/no-show", response_model=AssignmentOut)
+async def no_show_task(
+    assignment_id: int,
+    is_owner_no_show: bool,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(admin_only)
+):
+    return await operations_service.no_show_assignment(
+        db,
+        assignment_id=assignment_id,
+        is_owner_no_show=is_owner_no_show,
+        background_tasks=background_tasks
+    )
+
 @router.get("/availability")
 async def get_system_availability(db: AsyncSession = Depends(get_db)):
     from app.models.resource import Machine, LabourTeam
@@ -53,7 +99,7 @@ async def get_system_availability(db: AsyncSession = Depends(get_db)):
     from sqlalchemy import cast, Date
     
     # Query all active network demands
-    query = select(Assignment).where(Assignment.status != 'completed')
+    query = select(Assignment).where(Assignment.status != 'COMPLETED')
     assigns = await db.execute(query)
     active = assigns.scalars().all()
     

@@ -21,7 +21,7 @@ async def test_admin():
             lc_res = await db.execute(select(func.count(LabourTeam.id)))
             total_labour = lc_res.scalar() or 0
             
-            query = select(Assignment).where(Assignment.status != 'completed')
+            query = select(Assignment).where(Assignment.status != 'COMPLETED')
             assigns = await db.execute(query)
             active = assigns.scalars().all()
             

@@ -59,7 +59,7 @@ async def query_copilot(
             lc_res = await db.execute(select(func.count(LabourTeam.id)))
             total_labour = lc_res.scalar() or 0
             
-            sq_query = select(Assignment).where(Assignment.status != 'completed')
+            sq_query = select(Assignment).where(Assignment.status != 'COMPLETED')
             assigns = await db.execute(sq_query)
             active = assigns.scalars().all()
             

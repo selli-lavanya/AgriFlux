@@ -32,3 +32,13 @@ async def read_all_farms(
     current_user: User = Depends(RoleChecker([UserRole.ADMIN]))
 ):
     return await farm_service.get_all_farms(db)
+
+@router.delete("/{farm_id}")
+async def delete_farm_operation(
+    farm_id: int,
+    confirm: bool = False,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(farmer_only)
+):
+    await farm_service.delete_farm(db, farm_id=farm_id, farmer_id=current_user.id, confirm=confirm)
+    return {"status": "purged", "message": "Territory and associated logistics purged from Matrix."}

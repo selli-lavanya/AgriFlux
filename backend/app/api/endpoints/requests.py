@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 from app.db.database import get_db
@@ -16,10 +16,11 @@ admin_only = RoleChecker([UserRole.ADMIN])
 @router.post("/", response_model=RequestOut)
 async def submit_request(
     request_in: RequestCreate, 
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db), 
     current_user: User = Depends(farmer_only)
 ):
-    return await operations_service.create_request(db, request_in=request_in, farmer_id=current_user.id)
+    return await operations_service.create_request(db, request_in=request_in, farmer_id=current_user.id, background_tasks=background_tasks)
 
 @router.get("/me", response_model=List[RequestOut])
 async def list_my_requests(

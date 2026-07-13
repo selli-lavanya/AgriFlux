@@ -34,10 +34,10 @@ async def get_analytics_overview(
 
     # 4. Utilization (Active assignments vs total resources)
     active_machine_assignments = await db.scalar(
-        select(func.count(Assignment.id)).where(Assignment.resource_type == 'machine', Assignment.status != 'completed')
+        select(func.count(Assignment.id)).where(Assignment.resource_type == 'machine', Assignment.status != 'COMPLETED')
     )
     active_labour_assignments = await db.scalar(
-        select(func.count(Assignment.id)).where(Assignment.resource_type == 'labour', Assignment.status != 'completed')
+        select(func.count(Assignment.id)).where(Assignment.resource_type == 'labour', Assignment.status != 'COMPLETED')
     )
 
     machine_utilization = (active_machine_assignments / total_machines) * 100
