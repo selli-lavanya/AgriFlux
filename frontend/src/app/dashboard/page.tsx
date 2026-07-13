@@ -33,7 +33,21 @@ export default function DashboardPage() {
   const [isResolvingAddress, setIsResolvingAddress] = useState(false);
   
   const [activeTab, setActiveTab] = useState<'overview' | 'farms' | 'requests' | 'machines' | 'labour' | 'dispatcher' | 'tasks' | 'calendar'>('overview');
-  const [reqForm, setReqForm] = useState({ farm_id: '', type: 'machine', required_by_date: '' });
+  const [reqForm, setReqForm] = useState({
+    farm_id: '', type: 'machine',
+    job_date: '',        // YYYY-MM-DD — becomes required_by_date
+    start_time: '',      // HH:MM
+    end_time: '',        // HH:MM
+    duration: '',        // auto-calculated minutes
+    max_budget_per_hour: '',
+    max_total_budget: '',
+    // machine-only
+    work_size: '',
+    quantity: '1',
+    // labour-only
+    workers_required: '',
+    partial_allowed: false,
+  });
   const [machineForm, setMachineForm] = useState({ type: 'Harvester', capacity_per_day: '' });
   const [labourForm, setLabourForm] = useState({ worker_count: '', skills: 'Manual Harvesting' });
 
@@ -195,18 +209,52 @@ export default function DashboardPage() {
   const handleCreateRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.post('/requests/', { ...reqForm, farm_id: parseInt(reqForm.farm_id), required_by_date: new Date(reqForm.required_by_date).toISOString() });
+      const d = reqForm.job_date; // YYYY-MM-DD
+      const toISO = (t: string) => t ? new Date(`${d}T${t}:00`).toISOString() : undefined;
+      const startISO = toISO(reqForm.start_time);
+      const endISO   = toISO(reqForm.end_time);
+
+      // Auto-calculate duration from start/end if not manually entered
+      let duration: number | undefined = reqForm.duration ? parseInt(reqForm.duration) : undefined;
+      if (!duration && startISO && endISO) {
+        duration = Math.max(Math.round((new Date(endISO).getTime() - new Date(startISO).getTime()) / 60000), 1);
+      }
+
+      const payload: any = {
+        farm_id:          parseInt(reqForm.farm_id),
+        type:             reqForm.type,
+        required_by_date: startISO ?? new Date(`${d}T00:00:00`).toISOString(),
+        start_time:       startISO,
+        end_time:         endISO,
+        duration,
+        max_budget_per_hour: reqForm.max_budget_per_hour ? parseFloat(reqForm.max_budget_per_hour) : undefined,
+        max_total_budget:    reqForm.max_total_budget    ? parseFloat(reqForm.max_total_budget)    : undefined,
+      };
+
+      if (reqForm.type === 'machine') {
+        payload.work_size = reqForm.work_size ? parseFloat(reqForm.work_size) : undefined;
+        payload.quantity  = reqForm.quantity  ? parseInt(reqForm.quantity)    : 1;
+      } else {
+        payload.workers_required = reqForm.workers_required ? parseInt(reqForm.workers_required) : undefined;
+        payload.partial_allowed  = reqForm.partial_allowed;
+      }
+
+      await api.post('/requests/', payload);
       addNotification({
         id: `req-success-${Date.now()}`,
         event_type: 'REQUEST_SUCCESS',
         entity_type: 'req',
         entity_id: 0,
-        message: "Request Deployed to Priority Engine!",
+        message: "Request deployed to Priority Engine!",
         timestamp: new Date().toISOString(),
         read: false
       });
+      // Reset form (keep farm and type)
+      setReqForm(prev => ({ ...prev, job_date: '', start_time: '', end_time: '', duration: '',
+        max_budget_per_hour: '', max_total_budget: '', work_size: '', quantity: '1',
+        workers_required: '', partial_allowed: false }));
       loadDashboardData();
-    } catch (err: any) { 
+    } catch (err: any) {
       const msg = err.response?.data?.message || err.response?.data?.detail || "Failed to create request.";
       addNotification({
         id: `req-err-${Date.now()}`,
@@ -594,31 +642,139 @@ export default function DashboardPage() {
 
         {activeTab === 'requests' && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <div className="lg:col-span-2 h-[450px] w-full rounded-2xl overflow-hidden relative border border-indigo-900/30">
+              {/* Map */}
+              <div className="lg:col-span-2 h-[420px] w-full rounded-2xl overflow-hidden relative border border-indigo-900/30">
                  <LeafletMap requests={requests} farms={farms} machines={machines} labourTeams={labourTeams} role={role || ''} />
               </div>
+
+              {/* Request Form */}
               <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-8">
-                <h3 className="text-xl font-bold mb-6 text-indigo-400">Deploy Request</h3>
-                <form onSubmit={handleCreateRequest} className="space-y-4">
-                  <select required className="w-full bg-black border border-neutral-800 p-3 rounded-xl text-sm text-neutral-300" value={reqForm.farm_id} onChange={e => setReqForm({...reqForm, farm_id: e.target.value})}>
-                    <option value="" disabled>Target Farm...</option>
-                    {farms.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-                  </select>
-                  <select required className="w-full bg-black border border-neutral-800 p-3 rounded-xl text-sm" value={reqForm.type} onChange={e => setReqForm({...reqForm, type: e.target.value})}>
-                    <option value="machine">Machinery</option>
-                    <option value="labour">Labour</option>
-                  </select>
-                  <input required type="date" className="w-full bg-black border border-neutral-800 p-3 rounded-xl text-sm text-neutral-400" value={reqForm.required_by_date} onChange={e => setReqForm({...reqForm, required_by_date: e.target.value})} />
-                  <button type="submit" disabled={!reqForm.farm_id} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold">Signal Engine</button>
+                <h3 className="text-xl font-bold mb-1 text-indigo-400">New Request</h3>
+                <p className="text-[11px] text-neutral-600 font-mono uppercase tracking-widest mb-6">Fill all fields — engine uses them for matching</p>
+                <form onSubmit={handleCreateRequest} className="space-y-5">
+
+                  {/* Farm + Type */}
+                  <div className="space-y-3">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-neutral-600">Target</p>
+                    <select required className="w-full bg-black border border-neutral-800 p-3 rounded-xl text-sm text-neutral-300 focus:border-indigo-500 focus:outline-none" value={reqForm.farm_id} onChange={e => setReqForm({...reqForm, farm_id: e.target.value})}>
+                      <option value="" disabled>Select Farm…</option>
+                      {farms.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                    </select>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button type="button" onClick={() => setReqForm({...reqForm, type: 'machine'})} className={`py-2.5 rounded-xl text-sm font-bold border transition-all ${ reqForm.type === 'machine' ? 'bg-amber-600 border-amber-500 text-white' : 'bg-black border-neutral-800 text-neutral-500 hover:border-neutral-600' }`}>🚜 Machinery</button>
+                      <button type="button" onClick={() => setReqForm({...reqForm, type: 'labour'})}  className={`py-2.5 rounded-xl text-sm font-bold border transition-all ${ reqForm.type === 'labour'  ? 'bg-rose-600  border-rose-500  text-white' : 'bg-black border-neutral-800 text-neutral-500 hover:border-neutral-600' }`}>👷 Labour</button>
+                    </div>
+                  </div>
+
+                  {/* Scheduling */}
+                  <div className="space-y-3 pt-1 border-t border-neutral-800">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-neutral-600 pt-2">Job Scheduling</p>
+                    <div>
+                      <label className="text-[10px] text-neutral-500 font-bold uppercase">Job Date</label>
+                      <input required type="date" className="w-full mt-1 bg-black border border-neutral-800 p-3 rounded-xl text-sm text-neutral-300 focus:border-indigo-500 focus:outline-none" value={reqForm.job_date} onChange={e => setReqForm({...reqForm, job_date: e.target.value})} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] text-neutral-500 font-bold uppercase">Available From</label>
+                        <input required type="time" className="w-full mt-1 bg-black border border-neutral-800 p-3 rounded-xl text-sm text-neutral-300 focus:border-indigo-500 focus:outline-none" value={reqForm.start_time} onChange={e => setReqForm({...reqForm, start_time: e.target.value})} />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-neutral-500 font-bold uppercase">Available Until</label>
+                        <input required type="time" className="w-full mt-1 bg-black border border-neutral-800 p-3 rounded-xl text-sm text-neutral-300 focus:border-indigo-500 focus:outline-none" value={reqForm.end_time} onChange={e => setReqForm({...reqForm, end_time: e.target.value})} />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-neutral-500 font-bold uppercase">Job Duration (minutes)</label>
+                      <input type="number" min="1" placeholder={reqForm.start_time && reqForm.end_time ? `Auto: ${Math.max(Math.round((new Date(`2000-01-01T${reqForm.end_time}`).getTime() - new Date(`2000-01-01T${reqForm.start_time}`).getTime())/60000),1)} min` : 'e.g. 120'} className="w-full mt-1 bg-black border border-neutral-800 p-3 rounded-xl text-sm text-neutral-300 placeholder:text-neutral-600 focus:border-indigo-500 focus:outline-none" value={reqForm.duration} onChange={e => setReqForm({...reqForm, duration: e.target.value})} />
+                      <p className="text-[10px] text-neutral-700 mt-1">Leave blank to auto-calculate from time window</p>
+                    </div>
+                  </div>
+
+                  {/* Budget */}
+                  <div className="space-y-3 pt-1 border-t border-neutral-800">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-neutral-600 pt-2">Budget Limits</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] text-neutral-500 font-bold uppercase">Max ₹/Hour</label>
+                        <input type="number" min="0" step="0.01" placeholder="e.g. 500" className="w-full mt-1 bg-black border border-neutral-800 p-3 rounded-xl text-sm text-neutral-300 placeholder:text-neutral-600 focus:border-indigo-500 focus:outline-none" value={reqForm.max_budget_per_hour} onChange={e => setReqForm({...reqForm, max_budget_per_hour: e.target.value})} />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-neutral-500 font-bold uppercase">Max Total ₹</label>
+                        <input type="number" min="0" step="0.01" placeholder="e.g. 5000" className="w-full mt-1 bg-black border border-neutral-800 p-3 rounded-xl text-sm text-neutral-300 placeholder:text-neutral-600 focus:border-indigo-500 focus:outline-none" value={reqForm.max_total_budget} onChange={e => setReqForm({...reqForm, max_total_budget: e.target.value})} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Conditional: Machine fields */}
+                  {reqForm.type === 'machine' && (
+                    <div className="space-y-3 pt-1 border-t border-neutral-800">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-amber-700 pt-2">Machinery Details</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[10px] text-neutral-500 font-bold uppercase">Work Size (Acres)</label>
+                          <input type="number" min="0" step="0.1" placeholder="e.g. 5.0" className="w-full mt-1 bg-black border border-neutral-800 p-3 rounded-xl text-sm text-neutral-300 placeholder:text-neutral-600 focus:border-amber-500 focus:outline-none" value={reqForm.work_size} onChange={e => setReqForm({...reqForm, work_size: e.target.value})} />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-neutral-500 font-bold uppercase">No. of Machines</label>
+                          <input type="number" min="1" placeholder="1" className="w-full mt-1 bg-black border border-neutral-800 p-3 rounded-xl text-sm text-neutral-300 placeholder:text-neutral-600 focus:border-amber-500 focus:outline-none" value={reqForm.quantity} onChange={e => setReqForm({...reqForm, quantity: e.target.value})} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Conditional: Labour fields */}
+                  {reqForm.type === 'labour' && (
+                    <div className="space-y-3 pt-1 border-t border-neutral-800">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-rose-700 pt-2">Labour Details</p>
+                      <div>
+                        <label className="text-[10px] text-neutral-500 font-bold uppercase">Workers Required</label>
+                        <input type="number" min="1" placeholder="e.g. 5" className="w-full mt-1 bg-black border border-neutral-800 p-3 rounded-xl text-sm text-neutral-300 placeholder:text-neutral-600 focus:border-rose-500 focus:outline-none" value={reqForm.workers_required} onChange={e => setReqForm({...reqForm, workers_required: e.target.value})} />
+                      </div>
+                      <button type="button" onClick={() => setReqForm({...reqForm, partial_allowed: !reqForm.partial_allowed})} className={`w-full py-3 rounded-xl text-sm font-bold border transition-all ${ reqForm.partial_allowed ? 'bg-rose-600/20 border-rose-500 text-rose-300' : 'bg-black border-neutral-800 text-neutral-500' }`}>
+                        {reqForm.partial_allowed ? '✅ Allow Partial Teams (Split Across Multiple)' : '⬜ Require Single Team Only'}
+                      </button>
+                    </div>
+                  )}
+
+                  <button type="submit" disabled={!reqForm.farm_id || !reqForm.job_date || !reqForm.start_time || !reqForm.end_time} className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white py-3.5 rounded-xl font-black transition-all shadow-lg shadow-indigo-600/20 active:scale-[.98]">🚀 Submit Request</button>
                 </form>
               </div>
-              <div className="space-y-4">
-                {requests.map(req => (
-                  <div key={req.id} className="bg-black/50 border border-neutral-800 p-5 rounded-2xl flex justify-between items-center">
-                    <div><p className="font-bold uppercase text-indigo-300">{req.type} Requirement</p><p className="text-xs text-neutral-500">Score: {req.priority_score.toFixed(1)}</p></div>
-                    <span className="text-[10px] font-bold px-2 py-1 bg-neutral-800 text-neutral-300 rounded-md uppercase">{req.status}</span>
-                  </div>
-                ))}
+
+              {/* Request List */}
+              <div className="space-y-3">
+                <h3 className="text-lg font-bold text-neutral-400 mb-4">My Requests ({requests.length})</h3>
+                {requests.length === 0 ? (
+                  <p className="text-neutral-600 italic text-sm">No requests submitted yet.</p>
+                ) : (
+                  requests.map(req => {
+                    const statusColors: Record<string, string> = {
+                      PENDING:     'bg-yellow-900/30 text-yellow-400 border-yellow-700/30',
+                      ASSIGNED:    'bg-emerald-900/30 text-emerald-400 border-emerald-700/30',
+                      IN_PROGRESS: 'bg-blue-900/30 text-blue-400 border-blue-700/30',
+                      COMPLETED:   'bg-neutral-800 text-neutral-400 border-neutral-700',
+                      UNSERVICED:  'bg-rose-900/30 text-rose-400 border-rose-700/30',
+                    };
+                    const sc = statusColors[req.status] ?? 'bg-neutral-800 text-neutral-400 border-neutral-700';
+                    return (
+                      <div key={req.id} className="bg-black/50 border border-neutral-800 p-5 rounded-2xl hover:border-neutral-700 transition-all">
+                        <div className="flex justify-between items-start mb-3">
+                          <div>
+                            <p className="font-bold text-white capitalize">{req.type === 'machine' ? '🚜' : '👷'} {req.type} Request</p>
+                            <p className="text-[10px] text-neutral-600 mt-0.5 font-mono">ID #{req.id} • Score {req.priority_score?.toFixed(1)}</p>
+                          </div>
+                          <span className={`text-[10px] font-black px-2.5 py-1 rounded-full border uppercase ${sc}`}>{req.status}</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-[11px] text-neutral-500">
+                          {req.required_by_date && <p>📅 {new Date(req.required_by_date).toLocaleDateString('en-IN', {day:'numeric', month:'short', year:'numeric'})}</p>}
+                          {req.duration         && <p>⏱ {req.duration} min</p>}
+                          {req.max_total_budget  && <p>💰 Budget ₹{req.max_total_budget}</p>}
+                          {req.estimated_cost    && <p className="text-emerald-600">✅ Cost ₹{req.estimated_cost?.toFixed(0)}</p>}
+                        </div>
+                        {req.priority_reason && <p className="text-[10px] text-indigo-500/70 mt-2 italic border-t border-neutral-900 pt-2">{req.priority_reason}</p>}
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
         )}
