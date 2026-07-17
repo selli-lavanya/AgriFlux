@@ -526,7 +526,7 @@ class AssignmentEngine:
         )
         db.add(assignment)
         req.status = RequestStatus.ASSIGNED
-        req.estimated_cost = best_cost
+        req.estimated_cost = round(best_cost, 2)
         req.reassignment_attempts = 0
         
         await self.confirm_slot_lock(db, "machine", best_candidate.id, req.required_by_date.date(), req.id)
@@ -626,7 +626,7 @@ class AssignmentEngine:
             return False
 
         req.status = RequestStatus.ASSIGNED
-        req.estimated_cost = total_cost
+        req.estimated_cost = round(total_cost, 2)
         req.reassignment_attempts = 0
         await db.commit()
         return True

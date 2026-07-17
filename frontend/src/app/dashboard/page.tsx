@@ -48,8 +48,8 @@ export default function DashboardPage() {
     workers_required: '',
     partial_allowed: false,
   });
-  const [machineForm, setMachineForm] = useState({ type: 'Harvester', capacity_per_day: '' });
-  const [labourForm, setLabourForm] = useState({ worker_count: '', skills: 'Manual Harvesting' });
+  const [machineForm, setMachineForm] = useState({ type: 'Harvester', capacity_per_day: '', location_lat: 28.6139, location_lng: 77.2090, cost_per_hour: '150' });
+  const [labourForm, setLabourForm] = useState({ worker_count: '', skills: 'Manual Harvesting', location_lat: 28.6139, location_lng: 77.2090, cost_per_worker_per_hour: '50' });
 
   const { notifications, addNotification } = useNotificationStore();
 
@@ -156,6 +156,22 @@ export default function DashboardPage() {
     }
   };
 
+  const executeMachineGPS = () => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition((pos) => {
+        setMachineForm(prev => ({ ...prev, location_lat: pos.coords.latitude, location_lng: pos.coords.longitude }));
+      }, () => alert("GPS Permission Denied. Drag the pin manually."));
+    }
+  };
+
+  const executeLabourGPS = () => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition((pos) => {
+        setLabourForm(prev => ({ ...prev, location_lat: pos.coords.latitude, location_lng: pos.coords.longitude }));
+      }, () => alert("GPS Permission Denied. Drag the pin manually."));
+    }
+  };
+
   const handleMapCoordinateChange = async (lat: number, lng: number) => {
     setNewFarm(prev => ({ ...prev, location_lat: lat, location_lng: lng }));
   };
@@ -215,9 +231,10 @@ export default function DashboardPage() {
       const endISO   = toISO(reqForm.end_time);
 
       // Auto-calculate duration from start/end if not manually entered
+      // Use Math.floor to avoid 1-minute drift from floating point
       let duration: number | undefined = reqForm.duration ? parseInt(reqForm.duration) : undefined;
       if (!duration && startISO && endISO) {
-        duration = Math.max(Math.round((new Date(endISO).getTime() - new Date(startISO).getTime()) / 60000), 1);
+        duration = Math.max(Math.floor((new Date(endISO).getTime() - new Date(startISO).getTime()) / 60000), 1);
       }
 
       const payload: any = {
@@ -271,7 +288,13 @@ export default function DashboardPage() {
   const handleCreateMachine = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.post('/machines/', { ...machineForm, capacity_per_day: parseFloat(machineForm.capacity_per_day) });
+      await api.post('/machines/', {
+        type: machineForm.type,
+        capacity_per_day: parseFloat(machineForm.capacity_per_day),
+        lat: machineForm.location_lat,
+        lng: machineForm.location_lng,
+        cost_per_hour: machineForm.cost_per_hour ? parseFloat(machineForm.cost_per_hour) : 150.0,
+      });
       addNotification({
         id: `mach-success-${Date.now()}`,
         event_type: 'ASSET_SUCCESS',
@@ -281,6 +304,7 @@ export default function DashboardPage() {
         timestamp: new Date().toISOString(),
         read: false
       });
+      setMachineForm({ type: 'Harvester', capacity_per_day: '', location_lat: 28.6139, location_lng: 77.2090, cost_per_hour: '150' });
       loadDashboardData();
     } catch (err) {
       addNotification({
@@ -298,7 +322,13 @@ export default function DashboardPage() {
   const handleCreateLabour = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.post('/labour/', { ...labourForm, worker_count: parseInt(labourForm.worker_count) });
+      await api.post('/labour/', {
+        worker_count: parseInt(labourForm.worker_count),
+        skills: labourForm.skills,
+        lat: labourForm.location_lat,
+        lng: labourForm.location_lng,
+        cost_per_worker_per_hour: labourForm.cost_per_worker_per_hour ? parseFloat(labourForm.cost_per_worker_per_hour) : 50.0,
+      });
       addNotification({
         id: `lab-success-${Date.now()}`,
         event_type: 'ROSTER_SUCCESS',
@@ -766,9 +796,9 @@ export default function DashboardPage() {
                         </div>
                         <div className="grid grid-cols-2 gap-2 text-[11px] text-neutral-500">
                           {req.required_by_date && <p>📅 {new Date(req.required_by_date).toLocaleDateString('en-IN', {day:'numeric', month:'short', year:'numeric'})}</p>}
-                          {req.duration         && <p>⏱ {req.duration} min</p>}
-                          {req.max_total_budget  && <p>💰 Budget ₹{req.max_total_budget}</p>}
-                          {req.estimated_cost    && <p className="text-emerald-600">✅ Cost ₹{req.estimated_cost?.toFixed(0)}</p>}
+                          {req.duration         && <p>⏱ {Math.round(req.duration)} min</p>}
+                          {req.max_total_budget  && <p>💰 Budget ₹{Number(req.max_total_budget).toLocaleString('en-IN', {minimumFractionDigits: 0, maximumFractionDigits: 2})}</p>}
+                          {req.estimated_cost    && <p className="text-emerald-600">✅ Cost ₹{Number(req.estimated_cost).toLocaleString('en-IN', {minimumFractionDigits: 0, maximumFractionDigits: 2})}</p>}
                         </div>
                         {req.priority_reason && <p className="text-[10px] text-indigo-500/70 mt-2 italic border-t border-neutral-900 pt-2">{req.priority_reason}</p>}
                       </div>
@@ -785,12 +815,36 @@ export default function DashboardPage() {
                 <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-8">
                   <h3 className="text-xl font-bold mb-6 text-amber-400">Register Machinery</h3>
                   <form onSubmit={handleCreateMachine} className="space-y-4">
-                    <select required className="w-full bg-black border border-neutral-800 p-3 rounded-xl text-sm text-neutral-300" value={machineForm.type} onChange={e => setMachineForm({...machineForm, type: e.target.value})}>
+                    <select required className="w-full bg-black border border-neutral-800 p-3 rounded-xl text-sm text-neutral-300 focus:border-amber-500 focus:outline-none" value={machineForm.type} onChange={e => setMachineForm({...machineForm, type: e.target.value})}>
                       <option value="Harvester">Harvester</option>
                       <option value="Tractor">Tractor</option>
                     </select>
-                    <input required type="number" step="0.1" placeholder="Capacity (Acres/Day)" className="w-full bg-black border border-neutral-800 p-3 rounded-xl text-sm" value={machineForm.capacity_per_day} onChange={e => setMachineForm({...machineForm, capacity_per_day: e.target.value})} />
-                    <button type="submit" className="w-full bg-amber-600 text-white font-bold py-3 rounded-xl">Register Asset</button>
+                    <input required type="number" step="0.1" placeholder="Capacity (Acres/Day)" className="w-full bg-black border border-neutral-800 p-3 rounded-xl text-sm focus:border-amber-500 focus:outline-none" value={machineForm.capacity_per_day} onChange={e => setMachineForm({...machineForm, capacity_per_day: e.target.value})} />
+                    <div>
+                      <label className="text-[10px] text-neutral-500 font-bold uppercase">Cost per Hour (₹)</label>
+                      <input type="number" step="0.01" placeholder="150" className="w-full mt-1 bg-black border border-neutral-800 p-3 rounded-xl text-sm focus:border-amber-500 focus:outline-none" value={machineForm.cost_per_hour} onChange={e => setMachineForm({...machineForm, cost_per_hour: e.target.value})} />
+                    </div>
+                    {/* GPS Map Picker — same as farm form */}
+                    <div className="border border-neutral-800 rounded-2xl overflow-hidden bg-black/50">
+                      <div className="flex flex-col md:flex-row justify-between items-center p-3 border-b border-neutral-800 bg-neutral-900/50">
+                        <h4 className="text-sm font-bold text-amber-300">📍 Machine Location</h4>
+                        <button type="button" onClick={executeMachineGPS} className="mt-2 md:mt-0 text-xs font-bold bg-blue-600/20 text-blue-400 hover:bg-blue-600/40 px-3 py-1.5 rounded transition">📡 Use My GPS</button>
+                      </div>
+                      <div className="h-[220px] w-full bg-neutral-800">
+                        <LocationPickerMap lat={machineForm.location_lat} lng={machineForm.location_lng} onChange={(lat, lng) => setMachineForm(prev => ({...prev, location_lat: lat, location_lng: lng}))} />
+                      </div>
+                      <div className="p-3 flex gap-3">
+                        <div className="flex-1">
+                          <label className="text-[10px] text-neutral-600 font-bold uppercase">Latitude</label>
+                          <input type="number" step="any" className="w-full mt-1 bg-black border border-neutral-800 p-2 rounded-lg text-xs text-neutral-300 focus:border-amber-500 focus:outline-none" value={machineForm.location_lat.toFixed(5)} onChange={e => setMachineForm(prev => ({...prev, location_lat: parseFloat(e.target.value) || prev.location_lat}))} />
+                        </div>
+                        <div className="flex-1">
+                          <label className="text-[10px] text-neutral-600 font-bold uppercase">Longitude</label>
+                          <input type="number" step="any" className="w-full mt-1 bg-black border border-neutral-800 p-2 rounded-lg text-xs text-neutral-300 focus:border-amber-500 focus:outline-none" value={machineForm.location_lng.toFixed(5)} onChange={e => setMachineForm(prev => ({...prev, location_lng: parseFloat(e.target.value) || prev.location_lng}))} />
+                        </div>
+                      </div>
+                    </div>
+                    <button type="submit" className="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-3 rounded-xl transition-all">Register Asset</button>
                   </form>
                 </div>
               )}
@@ -811,9 +865,33 @@ export default function DashboardPage() {
                 <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-8">
                   <h3 className="text-xl font-bold mb-6 text-rose-400">Register Syndicate</h3>
                   <form onSubmit={handleCreateLabour} className="space-y-4">
-                    <input required type="number" placeholder="Worker Count" className="w-full bg-black border border-neutral-800 p-3 rounded-xl text-sm" value={labourForm.worker_count} onChange={e => setLabourForm({...labourForm, worker_count: e.target.value})} />
-                    <input required placeholder="Primary Skills" className="w-full bg-black border border-neutral-800 p-3 rounded-xl text-sm" value={labourForm.skills} onChange={e => setLabourForm({...labourForm, skills: e.target.value})} />
-                    <button type="submit" className="w-full bg-rose-600 text-white font-bold py-3 rounded-xl">Mobilize Workforce</button>
+                    <input required type="number" placeholder="Worker Count" className="w-full bg-black border border-neutral-800 p-3 rounded-xl text-sm focus:border-rose-500 focus:outline-none" value={labourForm.worker_count} onChange={e => setLabourForm({...labourForm, worker_count: e.target.value})} />
+                    <input required placeholder="Primary Skills (e.g. Manual Harvesting)" className="w-full bg-black border border-neutral-800 p-3 rounded-xl text-sm focus:border-rose-500 focus:outline-none" value={labourForm.skills} onChange={e => setLabourForm({...labourForm, skills: e.target.value})} />
+                    <div>
+                      <label className="text-[10px] text-neutral-500 font-bold uppercase">Cost per Worker per Hour (₹)</label>
+                      <input type="number" step="0.01" placeholder="50" className="w-full mt-1 bg-black border border-neutral-800 p-3 rounded-xl text-sm focus:border-rose-500 focus:outline-none" value={labourForm.cost_per_worker_per_hour} onChange={e => setLabourForm({...labourForm, cost_per_worker_per_hour: e.target.value})} />
+                    </div>
+                    {/* GPS Map Picker — same as farm form */}
+                    <div className="border border-neutral-800 rounded-2xl overflow-hidden bg-black/50">
+                      <div className="flex flex-col md:flex-row justify-between items-center p-3 border-b border-neutral-800 bg-neutral-900/50">
+                        <h4 className="text-sm font-bold text-rose-300">📍 Team Base Location</h4>
+                        <button type="button" onClick={executeLabourGPS} className="mt-2 md:mt-0 text-xs font-bold bg-blue-600/20 text-blue-400 hover:bg-blue-600/40 px-3 py-1.5 rounded transition">📡 Use My GPS</button>
+                      </div>
+                      <div className="h-[220px] w-full bg-neutral-800">
+                        <LocationPickerMap lat={labourForm.location_lat} lng={labourForm.location_lng} onChange={(lat, lng) => setLabourForm(prev => ({...prev, location_lat: lat, location_lng: lng}))} />
+                      </div>
+                      <div className="p-3 flex gap-3">
+                        <div className="flex-1">
+                          <label className="text-[10px] text-neutral-600 font-bold uppercase">Latitude</label>
+                          <input type="number" step="any" className="w-full mt-1 bg-black border border-neutral-800 p-2 rounded-lg text-xs text-neutral-300 focus:border-rose-500 focus:outline-none" value={labourForm.location_lat.toFixed(5)} onChange={e => setLabourForm(prev => ({...prev, location_lat: parseFloat(e.target.value) || prev.location_lat}))} />
+                        </div>
+                        <div className="flex-1">
+                          <label className="text-[10px] text-neutral-600 font-bold uppercase">Longitude</label>
+                          <input type="number" step="any" className="w-full mt-1 bg-black border border-neutral-800 p-2 rounded-lg text-xs text-neutral-300 focus:border-rose-500 focus:outline-none" value={labourForm.location_lng.toFixed(5)} onChange={e => setLabourForm(prev => ({...prev, location_lng: parseFloat(e.target.value) || prev.location_lng}))} />
+                        </div>
+                      </div>
+                    </div>
+                    <button type="submit" className="w-full bg-rose-600 hover:bg-rose-500 text-white font-bold py-3 rounded-xl transition-all">Mobilize Workforce</button>
                   </form>
                 </div>
               )}
@@ -837,10 +915,15 @@ export default function DashboardPage() {
                   <div>
                     <p className="font-bold text-white mb-1 uppercase tracking-widest text-sm">Request ID #{task.request_id}</p>
                     <p className="text-xs text-neutral-500">Date: <span className="text-indigo-300">{new Date(task.scheduled_date).toLocaleDateString()}</span></p>
-                    <span className={`mt-2 inline-block px-2 py-1 text-[10px] uppercase font-bold rounded-full ${task.status === 'completed' ? 'bg-emerald-900/40 text-emerald-400' : 'bg-amber-900/40 text-amber-400'}`}>{task.status}</span>
+                    <span className={`mt-2 inline-block px-2 py-1 text-[10px] uppercase font-bold rounded-full ${
+                      task.status === 'COMPLETED' ? 'bg-emerald-900/40 text-emerald-400 border border-emerald-700/50' : 
+                      ['FAILED', 'NO_SHOW', 'CANCELLED'].includes(task.status) ? 'bg-rose-900/40 text-rose-400 border border-rose-700/50' :
+                      task.status === 'IN_PROGRESS' ? 'bg-blue-900/40 text-blue-400 border border-blue-700/50' :
+                      'bg-amber-900/40 text-amber-400 border border-amber-700/50'
+                    }`}>{task.status}</span>
                   </div>
-                  {task.status !== 'completed' && (
-                    <button onClick={() => handleCompleteTask(task.id)} className="bg-emerald-600 text-white px-6 py-3 rounded-xl font-bold text-sm shadow-xl">Complete Task</button>
+                  {['SCHEDULED', 'IN_PROGRESS'].includes(task.status) && (
+                    <button onClick={() => handleCompleteTask(task.id)} className="bg-emerald-600 hover:bg-emerald-500 transition-colors text-white px-6 py-3 rounded-xl font-bold text-sm shadow-xl">Complete Task</button>
                   )}
                 </div>
               ))}

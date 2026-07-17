@@ -86,26 +86,35 @@ export default function MapOverlay({ requests = [], farms = [], machines = [], l
   const opCenterLat = farmMarkers.length > 0 ? farmMarkers[0].lat : 28.61;
   const opCenterLng = farmMarkers.length > 0 ? farmMarkers[0].lng : 77.20;
 
-  // Synthesize machine and labour coordinates (since MVP DB lacks live vehicle GPS)
+  // Use real DB coordinates for machines
   const machineMarkers = useMemo(() => {
-    return machines.map(m => ({
-      lat: opCenterLat + ((m.id % 20) - 10) * 0.04,
-      lng: opCenterLng + (((m.id * 3) % 20) - 10) * 0.04,
-      id: m.id,
-      type: m.type,
-      capacity: m.capacity_per_day
-    }));
-  }, [machines, opCenterLat, opCenterLng]);
+    return machines
+      .filter(m => m.lat != null && m.lng != null)
+      .map(m => ({
+        lat: m.lat,
+        lng: m.lng,
+        id: m.id,
+        type: m.type,
+        capacity: m.capacity_per_day,
+        cost: m.cost_per_hour,
+        status: m.status,
+      }));
+  }, [machines]);
 
+  // Use real DB coordinates for labour teams
   const labourMarkers = useMemo(() => {
-    return labourTeams.map(l => ({
-      lat: opCenterLat + (((l.id * 2) % 15) - 7) * 0.05,
-      lng: opCenterLng + (((l.id * 5) % 15) - 7) * 0.05,
-      id: l.id,
-      workers: l.worker_count,
-      skills: l.skills
-    }));
-  }, [labourTeams, opCenterLat, opCenterLng]);
+    return labourTeams
+      .filter(l => l.lat != null && l.lng != null)
+      .map(l => ({
+        lat: l.lat,
+        lng: l.lng,
+        id: l.id,
+        workers: l.worker_count,
+        skills: l.skills,
+        cost: l.cost_per_worker_per_hour,
+        status: l.status,
+      }));
+  }, [labourTeams]);
 
   // Aggregate all items for BoundFitter
   const allPoints = [
@@ -180,19 +189,20 @@ export default function MapOverlay({ requests = [], farms = [], machines = [], l
         {role === 'admin' && machineMarkers.map(m => (
           <Marker key={`mach-${m.id}`} position={[m.lat, m.lng]} icon={getIcon('machine')}>
             <Popup className="clean-popup">
-               <div className="p-2 min-w-[180px]">
+               <div className="p-2 min-w-[190px]">
                  <div className="flex items-center gap-2 mb-2 pb-2 border-b border-amber-200">
                     <span className="text-xl">🚜</span>
                     <div>
                        <p className="text-amber-600 font-bold uppercase tracking-wider text-[10px] m-0">Hardware Provider</p>
-                       <p className="text-gray-900 font-extrabold text-base m-0 leading-tight">Unit #{m.id}</p>
+                       <p className="text-gray-900 font-extrabold text-base m-0 leading-tight">{m.type} #{m.id}</p>
                     </div>
                  </div>
-                 <p className="text-sm font-bold text-gray-800 m-0">{m.type}</p>
-                 <p className="text-xs text-gray-500 m-0 mt-1">Daily Capacity: <span className="font-bold text-gray-900">{m.capacity} units</span></p>
+                 <p className="text-xs text-gray-500 m-0">Capacity: <span className="font-bold text-gray-900">{m.capacity} Acres/day</span></p>
+                 {m.cost && <p className="text-xs text-gray-500 m-0 mt-1">Rate: <span className="font-bold text-amber-600">₹{m.cost}/hr</span></p>}
+                 {m.status && <p className="text-[10px] font-bold uppercase mt-1 text-emerald-600">{m.status}</p>}
                  <div className="mt-2 pt-2 border-t border-gray-100">
-                    <p className="text-[9px] font-mono text-gray-400">SYNTHESIZED GPS ANCHOR</p>
-                    <p className="text-[10px] text-gray-500 font-mono">[{m.lat.toFixed(4)}, {m.lng.toFixed(4)}]</p>
+                    <p className="text-[9px] font-mono text-gray-400">GPS (Real Location)</p>
+                    <p className="text-[10px] text-gray-500 font-mono">[{m.lat.toFixed(5)}, {m.lng.toFixed(5)}]</p>
                  </div>
                </div>
             </Popup>
@@ -203,25 +213,26 @@ export default function MapOverlay({ requests = [], farms = [], machines = [], l
         {role === 'admin' && labourMarkers.map(l => (
           <Marker key={`lab-${l.id}`} position={[l.lat, l.lng]} icon={getIcon('labour')}>
             <Popup className="clean-popup">
-               <div className="p-2 min-w-[180px]">
+               <div className="p-2 min-w-[190px]">
                  <div className="flex items-center gap-2 mb-2 pb-2 border-b border-purple-200">
                     <span className="text-xl">👷</span>
                     <div>
-                       <p className="text-purple-600 font-bold uppercase tracking-wider text-[10px] m-0">Syndicate Leader</p>
+                       <p className="text-purple-600 font-bold uppercase tracking-wider text-[10px] m-0">Labour Syndicate</p>
                        <p className="text-gray-900 font-extrabold text-base m-0 leading-tight">Roster #{l.id}</p>
                     </div>
                  </div>
-                 <p className="text-sm font-bold text-gray-800 m-0">Op Count: <span className="font-bold text-gray-900">{l.workers}</span></p>
-                 <p className="text-[10px] text-gray-500 m-0 mt-1">Skills: {l.skills}</p>
+                 <p className="text-xs text-gray-500 m-0">Workers: <span className="font-bold text-gray-900">{l.workers}</span></p>
+                 <p className="text-xs text-gray-500 m-0 mt-1">Skills: {l.skills}</p>
+                 {l.cost && <p className="text-xs text-gray-500 m-0 mt-1">Rate: <span className="font-bold text-purple-600">₹{l.cost}/worker/hr</span></p>}
+                 {l.status && <p className="text-[10px] font-bold uppercase mt-1 text-emerald-600">{l.status}</p>}
                  <div className="mt-2 pt-2 border-t border-gray-100">
-                    <p className="text-[9px] font-mono text-gray-400">SYNTHESIZED GPS ANCHOR</p>
-                    <p className="text-[10px] text-gray-500 font-mono">[{l.lat.toFixed(4)}, {l.lng.toFixed(4)}]</p>
+                    <p className="text-[9px] font-mono text-gray-400">GPS (Real Location)</p>
+                    <p className="text-[10px] text-gray-500 font-mono">[{l.lat.toFixed(5)}, {l.lng.toFixed(5)}]</p>
                  </div>
                </div>
             </Popup>
           </Marker>
         ))}
-
       </MapContainer>
 
       {/* Clear Legend */}
